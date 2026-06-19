@@ -42,6 +42,9 @@ public class UnPolledScapePlugin extends Plugin
     @Inject
     private UnPolledScapeConfig config;
 
+    private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
+    private boolean warnedLadyKeliAppearance;
+
     @Override
     protected void startUp()
     {
@@ -51,6 +54,7 @@ public class UnPolledScapePlugin extends Plugin
     @Override
     protected void shutDown()
     {
+        npcAppearanceReplacements.restoreLadyKeli(client);
         log.debug("UnPolledScape stopped");
     }
 
@@ -59,7 +63,14 @@ public class UnPolledScapePlugin extends Plugin
     {
         if (!config.npcs())
         {
+            npcAppearanceReplacements.restoreLadyKeli(client);
             return;
+        }
+
+        if (!npcAppearanceReplacements.applyLadyKeli(client) && !warnedLadyKeliAppearance)
+        {
+            warnedLadyKeliAppearance = true;
+            log.warn("Unable to restore Lady Keli's legacy appearance");
         }
 
         Set<Widget> visited = Collections.newSetFromMap(new IdentityHashMap<>());
