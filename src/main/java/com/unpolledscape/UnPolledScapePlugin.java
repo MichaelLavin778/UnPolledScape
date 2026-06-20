@@ -11,6 +11,7 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
+import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
@@ -42,6 +43,7 @@ public class UnPolledScapePlugin extends Plugin
     @Inject
     private UnPolledScapeConfig config;
 
+    private final CharacterReplacements characterReplacements = new CharacterReplacements();
     private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
     private boolean warnedLadyKeliAppearance;
 
@@ -54,6 +56,7 @@ public class UnPolledScapePlugin extends Plugin
     @Override
     protected void shutDown()
     {
+        characterReplacements.restore(client);
         npcAppearanceReplacements.restoreLadyKeli(client);
         log.debug("UnPolledScape stopped");
     }
@@ -61,6 +64,15 @@ public class UnPolledScapePlugin extends Plugin
     @Subscribe
     public void onPostClientTick(PostClientTick event)
     {
+        if (config.character())
+        {
+            characterReplacements.apply(client);
+        }
+        else
+        {
+            characterReplacements.restore(client);
+        }
+
         if (!config.npcs())
         {
             npcAppearanceReplacements.restoreLadyKeli(client);
@@ -77,6 +89,15 @@ public class UnPolledScapePlugin extends Plugin
         for (WidgetInfo widgetInfo : DIALOGUE_WIDGETS)
         {
             replaceWidgetText(client.getWidget(widgetInfo), visited);
+        }
+    }
+
+    @Subscribe
+    public void onMenuOptionClicked(MenuOptionClicked event)
+    {
+        if (config.character())
+        {
+            characterReplacements.handleMenuOptionClicked(client, event);
         }
     }
 

@@ -1,6 +1,7 @@
 # UnPolledScape
 
-A RuneLite external plugin shell for the Plugin Hub.
+A RuneLite external plugin for restoring selected legacy NPC, dialogue, and
+character interface elements.
 
 ## Development
 

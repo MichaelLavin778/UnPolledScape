@@ -8,11 +8,23 @@ import net.runelite.client.config.ConfigItem;
 public interface UnPolledScapeConfig extends Config
 {
     @ConfigItem(
+        position = 0,
         keyName = "npcs",
         name = "NPCs",
         description = "Enable legacy NPC names, dialogue, and interaction text."
     )
     default boolean npcs()
+    {
+        return false;
+    }
+
+    @ConfigItem(
+        position = 1,
+        keyName = "character",
+        name = "Character",
+        description = "Enable legacy character creation and Make-over Mage body type screens."
+    )
+    default boolean character()
     {
         return false;
     }
