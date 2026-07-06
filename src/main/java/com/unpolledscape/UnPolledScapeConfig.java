@@ -15,7 +15,7 @@ public interface UnPolledScapeConfig extends Config
     )
     default boolean npcs()
     {
-        return false;
+        return true;
     }
 
     @ConfigItem(
@@ -26,6 +26,6 @@ public interface UnPolledScapeConfig extends Config
     )
     default boolean character()
     {
-        return false;
+        return true;
     }
 }

@@ -15,6 +15,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -43,6 +44,9 @@ public class UnPolledScapePlugin extends Plugin
     @Inject
     private UnPolledScapeConfig config;
 
+    @Inject
+    private ClientThread clientThread;
+
     private final CharacterReplacements characterReplacements = new CharacterReplacements();
     private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
     private boolean warnedLadyKeliAppearance;
@@ -56,9 +60,12 @@ public class UnPolledScapePlugin extends Plugin
     @Override
     protected void shutDown()
     {
-        characterReplacements.restore(client);
-        npcAppearanceReplacements.restoreLadyKeli(client);
-        log.debug("UnPolledScape stopped");
+        clientThread.invoke(() ->
+        {
+            characterReplacements.restore(client);
+            npcAppearanceReplacements.restoreLadyKeli(client);
+            log.debug("UnPolledScape stopped");
+        });
     }
 
     @Subscribe
