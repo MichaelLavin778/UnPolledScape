@@ -8,6 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import net.runelite.api.Client;
+import net.runelite.api.Player;
+import net.runelite.api.PlayerComposition;
+import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InterfaceID;
@@ -18,6 +21,13 @@ final class CharacterReplacements
 {
     private static final int BODY_TYPE_B = 1;
     private static final int MAX_HAIR_STYLE_SKIPS = 64;
+    private static final String MODERN_CHARACTER_PROMPT = "Select skin colour, body type and pronouns";
+    private static final String LEGACY_CHARACTER_PROMPT = "Select skin colour and gender";
+    private static final String MODERN_BODY_TYPE_SINGULAR = "Body type";
+    private static final String MODERN_BODY_TYPE_PLURAL = "Body types";
+    private static final String LEGACY_BODY_TYPE = "Gender";
+    private static final String FACIAL_HAIR_CATEGORY_LABEL = "facialhair";
+    private static final String SHAVE_MENU_OPTION = "shave";
     private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final Pattern STYLE_NAME_NORMALIZER = Pattern.compile("[^a-z0-9]");
 
@@ -79,6 +89,13 @@ final class CharacterReplacements
         InterfaceID.PlayerDesign.DROPDOWN_SCROLLBAR
     };
 
+    private static final int[] PLAYER_DESIGN_FACIAL_HAIR_WIDGETS = {
+        InterfaceID.PlayerDesign.JAW,
+        InterfaceID.PlayerDesign.JAW_TEXT,
+        InterfaceID.PlayerDesign.JAW_LEFT,
+        InterfaceID.PlayerDesign.JAW_RIGHT
+    };
+
     private static final int[] MAKEOVER_MAGE_PRONOUN_WIDGETS = {
         InterfaceID.MakeoverMage.PRONOUNS,
         InterfaceID.MakeoverMage.PRONOUNS_RECT0,
@@ -120,6 +137,16 @@ final class CharacterReplacements
         return handlePlayerDesignHairClick(client, event) || handleMakeoverHairClick(client, event);
     }
 
+    void handleMenuEntryAdded(Client client, MenuEntryAdded event)
+    {
+        if (!isShaveMenuOption(event.getOption()) || !isLocalPlayerFemale(client))
+        {
+            return;
+        }
+
+        client.getMenu().removeMenuEntry(event.getMenuEntry());
+    }
+
     void restore(Client client)
     {
         for (Map.Entry<Integer, WidgetSnapshot> entry : snapshots.entrySet())
@@ -141,13 +168,15 @@ final class CharacterReplacements
             return false;
         }
 
+        replaceInterfaceText(client, InterfaceID.PlayerDesign.UNIVERSE);
         setText(client, InterfaceID.PlayerDesign.CONTENTS_BOTTOM_HEADER, "Gender");
         setText(client, InterfaceID.PlayerDesign.GENDER, "Gender");
         setText(client, InterfaceID.PlayerDesign.GENDER_MALE, "Male");
         setText(client, InterfaceID.PlayerDesign.GENDER_FEMALE, "Female");
         setNameAndAction(client, InterfaceID.PlayerDesign.GENDER_MALE, "Male");
         setNameAndAction(client, InterfaceID.PlayerDesign.GENDER_FEMALE, "Female");
-        hideWidgets(client, PLAYER_DESIGN_PRONOUN_WIDGETS);
+        setWidgetsHidden(client, PLAYER_DESIGN_PRONOUN_WIDGETS, true);
+        setWidgetsHidden(client, PLAYER_DESIGN_FACIAL_HAIR_WIDGETS, isPlayerDesignFemale(client));
         enforcePlayerDesignHair(client, true);
         return true;
     }
@@ -159,11 +188,12 @@ final class CharacterReplacements
             return false;
         }
 
+        replaceInterfaceText(client, InterfaceID.MakeoverMage.UNIVERSE);
         setText(client, InterfaceID.MakeoverMage.A_TITLE, "Male");
         setText(client, InterfaceID.MakeoverMage.B_TITLE, "Female");
         setNameAndAction(client, InterfaceID.MakeoverMage.BODYTYPE_A, "Male");
         setNameAndAction(client, InterfaceID.MakeoverMage.BODYTYPE_B, "Female");
-        hideWidgets(client, MAKEOVER_MAGE_PRONOUN_WIDGETS);
+        setWidgetsHidden(client, MAKEOVER_MAGE_PRONOUN_WIDGETS, true);
         return true;
     }
 
@@ -174,7 +204,10 @@ final class CharacterReplacements
             return false;
         }
 
-        hideDisallowedMakeoverHairWidgets(client, isMakeoverFemale(client));
+        replaceInterfaceText(client, InterfaceID.Makeover.UNIVERSE);
+        boolean female = isMakeoverFemale(client);
+        hideDisallowedMakeoverHairWidgets(client, female);
+        hideMakeoverFacialHairCategory(client, female);
         return true;
     }
 
@@ -318,6 +351,55 @@ final class CharacterReplacements
         return disallowed;
     }
 
+    private void hideMakeoverFacialHairCategory(Client client, boolean female)
+    {
+        Widget universe = client.getWidget(InterfaceID.Makeover.UNIVERSE);
+        if (universe != null)
+        {
+            updateMakeoverFacialHairWidget(universe, female, true);
+        }
+    }
+
+    private boolean updateMakeoverFacialHairWidget(Widget widget, boolean female, boolean root)
+    {
+        boolean ownMatch = isFacialHairCategoryLabel(widget.getText())
+            || isFacialHairCategoryLabel(widget.getName());
+
+        boolean childMatch = updateMakeoverFacialHairWidgets(widget.getStaticChildren(), female)
+            | updateMakeoverFacialHairWidgets(widget.getDynamicChildren(), female)
+            | updateMakeoverFacialHairWidgets(widget.getNestedChildren(), female);
+
+        if (!root)
+        {
+            boolean hide = female && (ownMatch || (childMatch && hasInteraction(widget)));
+            if (hide || snapshots.containsKey(widget.getId()))
+            {
+                setHidden(widget, hide);
+            }
+        }
+
+        return ownMatch || childMatch;
+    }
+
+    private boolean updateMakeoverFacialHairWidgets(Widget[] widgets, boolean female)
+    {
+        if (widgets == null)
+        {
+            return false;
+        }
+
+        boolean matched = false;
+        for (Widget widget : widgets)
+        {
+            if (widget != null)
+            {
+                matched |= updateMakeoverFacialHairWidget(widget, female, false);
+            }
+        }
+
+        return matched;
+    }
+
     private boolean hasInteraction(Widget widget)
     {
         if (widget.getOnOpListener() != null)
@@ -358,7 +440,19 @@ final class CharacterReplacements
         return client.getVarbitValue(VarbitID.MAKEOVER_BODYTYPE) == BODY_TYPE_B;
     }
 
-    private void hideWidgets(Client client, int[] widgetIds)
+    private boolean isLocalPlayerFemale(Client client)
+    {
+        Player localPlayer = client.getLocalPlayer();
+        if (localPlayer == null)
+        {
+            return false;
+        }
+
+        PlayerComposition composition = localPlayer.getPlayerComposition();
+        return composition != null && composition.getGender() == BODY_TYPE_B;
+    }
+
+    private void setWidgetsHidden(Client client, int[] widgetIds, boolean hidden)
     {
         for (int widgetId : widgetIds)
         {
@@ -368,7 +462,45 @@ final class CharacterReplacements
                 continue;
             }
 
-            setHidden(widget, true);
+            setHidden(widget, hidden);
+        }
+    }
+
+    private void replaceInterfaceText(Client client, int rootWidgetId)
+    {
+        replaceInterfaceText(client.getWidget(rootWidgetId));
+    }
+
+    private void replaceInterfaceText(Widget widget)
+    {
+        if (widget == null)
+        {
+            return;
+        }
+
+        String currentText = widget.getText();
+        String replacement = restoreCharacterCreationText(currentText);
+        if (replacement != null && !replacement.equals(currentText))
+        {
+            snapshot(widget);
+            widget.setText(replacement);
+        }
+
+        replaceInterfaceText(widget.getStaticChildren());
+        replaceInterfaceText(widget.getDynamicChildren());
+        replaceInterfaceText(widget.getNestedChildren());
+    }
+
+    private void replaceInterfaceText(Widget[] widgets)
+    {
+        if (widgets == null)
+        {
+            return;
+        }
+
+        for (Widget widget : widgets)
+        {
+            replaceInterfaceText(widget);
         }
     }
 
@@ -401,6 +533,29 @@ final class CharacterReplacements
             widget.setName(name);
         }
         widget.setAction(0, "Select");
+    }
+
+    static String restoreCharacterCreationText(String text)
+    {
+        if (text == null || text.isEmpty())
+        {
+            return text;
+        }
+
+        String replacement = text.replace(MODERN_CHARACTER_PROMPT, LEGACY_CHARACTER_PROMPT);
+        replacement = replacement.replace(MODERN_BODY_TYPE_PLURAL, LEGACY_BODY_TYPE);
+        replacement = replacement.replace(MODERN_BODY_TYPE_SINGULAR, LEGACY_BODY_TYPE);
+        return replacement;
+    }
+
+    static boolean isShaveMenuOption(String option)
+    {
+        return SHAVE_MENU_OPTION.equals(normalizeStyleName(option));
+    }
+
+    static boolean isFacialHairCategoryLabel(String text)
+    {
+        return FACIAL_HAIR_CATEGORY_LABEL.equals(normalizeStyleName(text));
     }
 
     private void setHidden(Widget widget, boolean hidden)
@@ -566,7 +721,7 @@ final class CharacterReplacements
         }
     }
 
-    private String normalizeStyleName(String text)
+    private static String normalizeStyleName(String text)
     {
         if (text == null)
         {

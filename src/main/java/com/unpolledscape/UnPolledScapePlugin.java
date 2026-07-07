@@ -13,8 +13,8 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PostClientTick;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -22,20 +22,17 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
-@PluginDescriptor(
-    name = "UnPolledScape"
-)
-public class UnPolledScapePlugin extends Plugin
-{
-    private static final WidgetInfo[] DIALOGUE_WIDGETS = {
-        WidgetInfo.DIALOG_NPC_NAME,
-        WidgetInfo.DIALOG_NPC_TEXT,
-        WidgetInfo.DIALOG_PLAYER,
-        WidgetInfo.DIALOG_PLAYER_TEXT,
-        WidgetInfo.DIALOG_OPTION,
-        WidgetInfo.DIALOG_OPTION_OPTIONS,
-        WidgetInfo.DIALOG_SPRITE_TEXT,
-        WidgetInfo.DIALOG_DOUBLE_SPRITE_TEXT
+@PluginDescriptor(name = "UnPolledScape")
+public class UnPolledScapePlugin extends Plugin {
+    private static final int[] DIALOGUE_WIDGETS = {
+            InterfaceID.ChatLeft.NAME,
+            InterfaceID.ChatLeft.TEXT,
+            InterfaceID.ChatRight.UNIVERSE,
+            InterfaceID.ChatRight.TEXT,
+            InterfaceID.Chatmenu.UNIVERSE,
+            InterfaceID.Chatmenu.OPTIONS,
+            InterfaceID.Objectbox.TEXT,
+            InterfaceID.ObjectboxDouble.TEXT
     };
 
     @Inject
@@ -52,16 +49,13 @@ public class UnPolledScapePlugin extends Plugin
     private boolean warnedLadyKeliAppearance;
 
     @Override
-    protected void startUp()
-    {
+    protected void startUp() {
         log.debug("UnPolledScape started");
     }
 
     @Override
-    protected void shutDown()
-    {
-        clientThread.invoke(() ->
-        {
+    protected void shutDown() {
+        clientThread.invoke(() -> {
             characterReplacements.restore(client);
             npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
@@ -69,83 +63,65 @@ public class UnPolledScapePlugin extends Plugin
     }
 
     @Subscribe
-    public void onPostClientTick(PostClientTick event)
-    {
-        if (config.character())
-        {
+    public void onPostClientTick(PostClientTick event) {
+        if (config.character()) {
             characterReplacements.apply(client);
-        }
-        else
-        {
+        } else {
             characterReplacements.restore(client);
         }
 
-        if (!config.npcs())
-        {
+        if (!config.npcs()) {
             npcAppearanceReplacements.restoreLadyKeli(client);
             return;
         }
 
-        if (!npcAppearanceReplacements.applyLadyKeli(client) && !warnedLadyKeliAppearance)
-        {
+        if (!npcAppearanceReplacements.applyLadyKeli(client) && !warnedLadyKeliAppearance) {
             warnedLadyKeliAppearance = true;
             log.warn("Unable to restore Lady Keli's legacy appearance");
         }
 
         Set<Widget> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (WidgetInfo widgetInfo : DIALOGUE_WIDGETS)
-        {
-            replaceWidgetText(client.getWidget(widgetInfo), visited);
+        for (int widgetId : DIALOGUE_WIDGETS) {
+            replaceWidgetText(client.getWidget(widgetId), visited);
         }
     }
 
     @Subscribe
-    public void onMenuOptionClicked(MenuOptionClicked event)
-    {
-        if (config.character())
-        {
+    public void onMenuOptionClicked(MenuOptionClicked event) {
+        if (config.character()) {
             characterReplacements.handleMenuOptionClicked(client, event);
         }
     }
 
     @Subscribe
-    public void onMenuEntryAdded(MenuEntryAdded event)
-    {
-        if (!config.npcs())
-        {
-            return;
+    public void onMenuEntryAdded(MenuEntryAdded event) {
+        if (config.character()) {
+            characterReplacements.handleMenuEntryAdded(client, event);
         }
 
-        replaceMenuEntryText(event.getMenuEntry());
+        if (config.npcs()) {
+            replaceMenuEntryText(event.getMenuEntry());
+        }
     }
 
     @Subscribe
-    public void onMenuOpened(MenuOpened event)
-    {
-        if (!config.npcs())
-        {
-            return;
-        }
-
-        for (MenuEntry menuEntry : event.getMenuEntries())
-        {
-            replaceMenuEntryText(menuEntry);
+    public void onMenuOpened(MenuOpened event) {
+        if (!config.npcs()) {
+            for (MenuEntry menuEntry : event.getMenuEntries()) {
+                replaceMenuEntryText(menuEntry);
+            }
         }
     }
 
-    private void replaceWidgetText(Widget widget, Set<Widget> visited)
-    {
-        if (widget == null || !visited.add(widget))
-        {
+    private void replaceWidgetText(Widget widget, Set<Widget> visited) {
+        if (widget == null || !visited.add(widget)) {
             return;
         }
 
         String text = widget.getText();
-        if (text != null && !text.isEmpty())
-        {
+        if (text != null && !text.isEmpty()) {
             String replacement = NpcReplacements.restoreNpcText(text);
-            if (!replacement.equals(text))
-            {
+            if (!replacement.equals(text)) {
                 widget.setText(replacement);
             }
         }
@@ -155,52 +131,41 @@ public class UnPolledScapePlugin extends Plugin
         replaceWidgetText(widget.getNestedChildren(), visited);
     }
 
-    private void replaceWidgetText(Widget[] widgets, Set<Widget> visited)
-    {
-        if (widgets == null)
-        {
+    private void replaceWidgetText(Widget[] widgets, Set<Widget> visited) {
+        if (widgets == null) {
             return;
         }
 
-        for (Widget widget : widgets)
-        {
+        for (Widget widget : widgets) {
             replaceWidgetText(widget, visited);
         }
     }
 
-    private void replaceMenuEntryText(MenuEntry menuEntry)
-    {
-        if (menuEntry == null || !isNpcMenuAction(menuEntry.getType()))
-        {
+    private void replaceMenuEntryText(MenuEntry menuEntry) {
+        if (menuEntry == null || !isNpcMenuAction(menuEntry.getType())) {
             return;
         }
 
         String target = menuEntry.getTarget();
         String replacementTarget = NpcReplacements.restoreNpcText(target);
-        if (replacementTarget != null && !replacementTarget.equals(target))
-        {
+        if (replacementTarget != null && !replacementTarget.equals(target)) {
             menuEntry.setTarget(replacementTarget);
             target = replacementTarget;
         }
 
         String option = menuEntry.getOption();
         String replacementOption = NpcReplacements.restoreNpcMenuOption(option, target);
-        if (replacementOption != null && !replacementOption.equals(option))
-        {
+        if (replacementOption != null && !replacementOption.equals(option)) {
             menuEntry.setOption(replacementOption);
         }
     }
 
-    private boolean isNpcMenuAction(MenuAction action)
-    {
-        if (action == null)
-        {
+    private boolean isNpcMenuAction(MenuAction action) {
+        if (action == null) {
             return false;
         }
 
-        switch (action)
-        {
-            case ITEM_USE_ON_NPC:
+        switch (action) {
             case WIDGET_TARGET_ON_NPC:
             case NPC_FIRST_OPTION:
             case NPC_SECOND_OPTION:
@@ -215,8 +180,7 @@ public class UnPolledScapePlugin extends Plugin
     }
 
     @Provides
-    UnPolledScapeConfig provideConfig(ConfigManager configManager)
-    {
+    UnPolledScapeConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(UnPolledScapeConfig.class);
     }
 }

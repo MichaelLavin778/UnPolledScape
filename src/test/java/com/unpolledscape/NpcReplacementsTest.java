@@ -59,4 +59,38 @@ public class NpcReplacementsTest
         assertEquals("Warrior women", NpcReplacements.restoreNpcText("Warrior women"));
         assertEquals("Warrior woman", NpcReplacements.restoreNpcText("Warrior woman"));
     }
+
+    @Test
+    public void restoresCharacterCreationPrompt()
+    {
+        assertEquals(
+            "Select skin colour and gender",
+            CharacterReplacements.restoreCharacterCreationText("Select skin colour, body type and pronouns")
+        );
+        assertEquals(
+            "<col=ffffff>Select skin colour and gender</col>",
+            CharacterReplacements.restoreCharacterCreationText("<col=ffffff>Select skin colour, body type and pronouns</col>")
+        );
+        assertEquals("Gender", CharacterReplacements.restoreCharacterCreationText("Body type"));
+        assertEquals("Gender", CharacterReplacements.restoreCharacterCreationText("Body types"));
+        assertEquals("Choose Gender", CharacterReplacements.restoreCharacterCreationText("Choose Body type"));
+    }
+
+    @Test
+    public void matchesShaveMenuOption()
+    {
+        assertEquals(true, CharacterReplacements.isShaveMenuOption("Shave"));
+        assertEquals(true, CharacterReplacements.isShaveMenuOption("<col=ff9040>Shave</col>"));
+        assertEquals(false, CharacterReplacements.isShaveMenuOption("Talk-to"));
+        assertEquals(false, CharacterReplacements.isShaveMenuOption(null));
+    }
+
+    @Test
+    public void matchesFacialHairCategoryLabel()
+    {
+        assertEquals(true, CharacterReplacements.isFacialHairCategoryLabel("Facial hair"));
+        assertEquals(true, CharacterReplacements.isFacialHairCategoryLabel("<col=ff9040>Facial hair</col>"));
+        assertEquals(false, CharacterReplacements.isFacialHairCategoryLabel("Hair"));
+        assertEquals(false, CharacterReplacements.isFacialHairCategoryLabel(null));
+    }
 }

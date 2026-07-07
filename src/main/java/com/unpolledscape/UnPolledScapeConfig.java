@@ -22,7 +22,7 @@ public interface UnPolledScapeConfig extends Config
         position = 1,
         keyName = "character",
         name = "Character",
-        description = "Enable legacy character creation and Make-over Mage body type screens."
+        description = "Enable legacy character creation and Make-over Mage gender screens."
     )
     default boolean character()
     {

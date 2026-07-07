@@ -7,7 +7,7 @@ import java.util.Locale;
 import net.runelite.api.Client;
 import net.runelite.api.NPCComposition;
 import net.runelite.api.NodeCache;
-import net.runelite.api.NpcID;
+import net.runelite.api.gameval.NpcID;
 
 final class NpcAppearanceReplacements
 {

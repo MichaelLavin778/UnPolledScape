@@ -1,5 +1,9 @@
 # Development Resources
 
+## Development
+
+Every change should be tied to a Config flag like "npcs" or "character" or etc.
+
 ## Reference Documentation
 
 - [Developer Guide · runelite/runelite Wiki](https://github.com/runelite/runelite/wiki/Developer-Guide)
