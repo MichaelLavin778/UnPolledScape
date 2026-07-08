@@ -208,4 +208,5 @@ final class NpcAppearanceReplacements
             return values == null ? new short[0] : values.clone();
         }
     }
+
 }

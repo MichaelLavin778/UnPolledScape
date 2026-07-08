@@ -1,38 +1,44 @@
 package com.unpolledscape;
 
 import com.google.inject.Provides;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
+import java.util.Map;
+import java.util.regex.Pattern;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
+import net.runelite.api.NPC;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.Renderable;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.PostClientTick;
+import net.runelite.api.events.PlayerChanged;
+import net.runelite.api.events.PostItemComposition;
+import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.InterfaceID;
-import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.callback.RenderCallback;
+import net.runelite.client.callback.RenderCallbackManager;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
 @PluginDescriptor(name = "UnPolledScape")
 public class UnPolledScapePlugin extends Plugin {
+    private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final int[] DIALOGUE_WIDGETS = {
-            InterfaceID.ChatLeft.NAME,
-            InterfaceID.ChatLeft.TEXT,
-            InterfaceID.ChatRight.UNIVERSE,
-            InterfaceID.ChatRight.TEXT,
-            InterfaceID.Chatmenu.UNIVERSE,
-            InterfaceID.Chatmenu.OPTIONS,
-            InterfaceID.Objectbox.TEXT,
-            InterfaceID.ObjectboxDouble.TEXT
+        InterfaceID.ChatLeft.NAME,
+        InterfaceID.ChatLeft.TEXT,
+        InterfaceID.ChatRight.UNIVERSE,
+        InterfaceID.ChatRight.TEXT,
+        InterfaceID.Chatmenu.UNIVERSE,
+        InterfaceID.Chatmenu.OPTIONS,
+        InterfaceID.Objectbox.TEXT,
+        InterfaceID.ObjectboxDouble.TEXT
     };
 
     @Inject
@@ -44,101 +50,177 @@ public class UnPolledScapePlugin extends Plugin {
     @Inject
     private ClientThread clientThread;
 
-    private final CharacterReplacements characterReplacements = new CharacterReplacements();
+    @Inject
+    private RenderCallbackManager renderCallbackManager;
+
+    private final MakeoverReplacements makeoverReplacements = new MakeoverReplacements();
+    private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
+    private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
     private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
-    private boolean warnedLadyKeliAppearance;
+    private final NpcDialogueReplacement npcDialogueReplacement = new NpcDialogueReplacement();
+    private final RenderCallback renderCallback = new RenderCallback()
+    {
+        @Override
+        public boolean addEntity(Renderable renderable, boolean drawingUi)
+        {
+            return shouldDraw(renderable, drawingUi);
+        }
+    };
 
     @Override
     protected void startUp() {
+        renderCallbackManager.register(renderCallback);
+        clientThread.invoke(this::checklist);
         log.debug("UnPolledScape started");
     }
 
     @Override
     protected void shutDown() {
+        renderCallbackManager.unregister(renderCallback);
         clientThread.invoke(() -> {
-            characterReplacements.restore(client);
+            makeoverReplacements.restore(client);
+            itemAppearanceReplacements.restore(client);
+            playerAppearanceReplacements.restore(client, itemAppearanceReplacements.replacementMap(client));
             npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
         });
     }
 
     @Subscribe
-    public void onPostClientTick(PostClientTick event) {
-        if (config.character()) {
-            characterReplacements.apply(client);
-        } else {
-            characterReplacements.restore(client);
-        }
-
-        if (!config.npcs()) {
-            npcAppearanceReplacements.restoreLadyKeli(client);
-            return;
-        }
-
-        if (!npcAppearanceReplacements.applyLadyKeli(client) && !warnedLadyKeliAppearance) {
-            warnedLadyKeliAppearance = true;
-            log.warn("Unable to restore Lady Keli's legacy appearance");
-        }
-
-        Set<Widget> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (int widgetId : DIALOGUE_WIDGETS) {
-            replaceWidgetText(client.getWidget(widgetId), visited);
+    public void onMenuOptionClicked(MenuOptionClicked event) {
+        if (config.makeover()) {
+            makeoverReplacements.handleMenuOptionClicked(client, event);
         }
     }
 
     @Subscribe
-    public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (config.character()) {
-            characterReplacements.handleMenuOptionClicked(client, event);
+    public void onConfigChanged(ConfigChanged event)
+    {
+        if (!"unpolledscape".equals(event.getGroup()))
+        {
+            return;
         }
+
+        clientThread.invoke(this::checklist);
     }
 
     @Subscribe
     public void onMenuEntryAdded(MenuEntryAdded event) {
-        if (config.character()) {
-            characterReplacements.handleMenuEntryAdded(client, event);
+        if (config.makeover()) {
+            makeoverReplacements.handleMenuEntryAdded(client, event);
+        }
+
+        if (config.items() && isHiddenReplacedItemMenuEntry(event.getMenuEntry())) {
+            client.getMenu().removeMenuEntry(event.getMenuEntry());
+            return;
         }
 
         if (config.npcs()) {
+            if (isHiddenNpcMenuEntry(event.getMenuEntry())) {
+                client.getMenu().removeMenuEntry(event.getMenuEntry());
+                return;
+            }
+
             replaceMenuEntryText(event.getMenuEntry());
         }
     }
 
     @Subscribe
     public void onMenuOpened(MenuOpened event) {
-        if (!config.npcs()) {
-            for (MenuEntry menuEntry : event.getMenuEntries()) {
-                replaceMenuEntryText(menuEntry);
+        if (config.npcs() || config.items()) {
+            MenuEntry[] menuEntries = event.getMenuEntries();
+            int kept = 0;
+            for (MenuEntry menuEntry : menuEntries) {
+                if (isHiddenNpcMenuEntry(menuEntry) || isHiddenReplacedItemMenuEntry(menuEntry)) {
+                    continue;
+                }
+
+                if (config.npcs()) {
+                    replaceMenuEntryText(menuEntry);
+                }
+                menuEntries[kept++] = menuEntry;
+            }
+
+            if (kept != menuEntries.length) {
+                MenuEntry[] filtered = new MenuEntry[kept];
+                System.arraycopy(menuEntries, 0, filtered, 0, kept);
+                event.setMenuEntries(filtered);
             }
         }
     }
 
-    private void replaceWidgetText(Widget widget, Set<Widget> visited) {
-        if (widget == null || !visited.add(widget)) {
+    @Subscribe
+    public void onPlayerChanged(PlayerChanged event)
+    {
+        if (!config.players())
+        {
             return;
         }
 
-        String text = widget.getText();
-        if (text != null && !text.isEmpty()) {
-            String replacement = NpcReplacements.restoreNpcText(text);
-            if (!replacement.equals(text)) {
-                widget.setText(replacement);
-            }
-        }
-
-        replaceWidgetText(widget.getStaticChildren(), visited);
-        replaceWidgetText(widget.getDynamicChildren(), visited);
-        replaceWidgetText(widget.getNestedChildren(), visited);
+        playerAppearanceReplacements.apply(client, itemAppearanceReplacements.replacementMap(client));
     }
 
-    private void replaceWidgetText(Widget[] widgets, Set<Widget> visited) {
-        if (widgets == null) {
+    @Subscribe
+    public void onPostItemComposition(PostItemComposition event)
+    {
+        if (!config.items())
+        {
             return;
         }
 
-        for (Widget widget : widgets) {
-            replaceWidgetText(widget, visited);
+        itemAppearanceReplacements.applyTo(client, event.getItemComposition());
+    }
+
+    private void checklist() {
+        if (config.makeover()) {
+            makeoverReplacements.apply(client);
+        } else {
+            makeoverReplacements.restore(client);
         }
+
+        Map<Integer, Integer> replacementMap = itemAppearanceReplacements.replacementMap(client);
+        if (config.items()) {
+            itemAppearanceReplacements.apply(client);
+        } else {
+            itemAppearanceReplacements.restore(client);
+        }
+
+        if (config.players()) {
+            playerAppearanceReplacements.apply(client, replacementMap);
+        }
+        else {
+            playerAppearanceReplacements.restore(client, replacementMap);
+        }
+
+        if (config.npcs()) {
+            npcDialogueReplacement.replaceDialogueWidgets(client, DIALOGUE_WIDGETS);
+            npcAppearanceReplacements.applyLadyKeli(client);
+        } else {
+            npcAppearanceReplacements.restoreLadyKeli(client);
+        }
+    }
+
+    private boolean isHiddenNpcMenuEntry(MenuEntry menuEntry) {
+        return menuEntry != null
+            && isNpcMenuAction(menuEntry.getType())
+            && isHiddenNpcTarget(menuEntry.getTarget());
+    }
+
+    private boolean isHiddenReplacedItemMenuEntry(MenuEntry menuEntry)
+    {
+        return menuEntry != null
+            && menuEntry.isItemOp()
+            && "Change-style".equalsIgnoreCase(menuEntry.getOption())
+            && itemAppearanceReplacements.isReplacementSourceItem(menuEntry.getItemId());
+    }
+
+    private boolean isHiddenNpcTarget(String target) {
+        if (target == null || target.isEmpty()) {
+            return false;
+        }
+
+        String normalized = TAG_PATTERN.matcher(target).replaceAll(" ").toLowerCase();
+        return normalized.contains("gilbert") || normalized.contains("sir kit breaker");
     }
 
     private void replaceMenuEntryText(MenuEntry menuEntry) {
@@ -177,6 +259,22 @@ public class UnPolledScapePlugin extends Plugin {
             default:
                 return false;
         }
+    }
+
+    private boolean shouldDraw(Renderable renderable, boolean drawingUi)
+    {
+        if (!config.npcs())
+        {
+            return true;
+        }
+
+        if (renderable instanceof NPC)
+        {
+            int npcId = ((NPC) renderable).getId();
+            return npcId != NpcID.PRIDE22_GILBERT && npcId != NpcID.PRIDE24_KIT_GLADE;
+        }
+
+        return true;
     }
 
     @Provides

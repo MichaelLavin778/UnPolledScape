@@ -65,32 +65,32 @@ public class NpcReplacementsTest
     {
         assertEquals(
             "Select skin colour and gender",
-            CharacterReplacements.restoreCharacterCreationText("Select skin colour, body type and pronouns")
+            MakeoverReplacements.restoreCharacterCreationText("Select skin colour, body type and pronouns")
         );
         assertEquals(
             "<col=ffffff>Select skin colour and gender</col>",
-            CharacterReplacements.restoreCharacterCreationText("<col=ffffff>Select skin colour, body type and pronouns</col>")
+            MakeoverReplacements.restoreCharacterCreationText("<col=ffffff>Select skin colour, body type and pronouns</col>")
         );
-        assertEquals("Gender", CharacterReplacements.restoreCharacterCreationText("Body type"));
-        assertEquals("Gender", CharacterReplacements.restoreCharacterCreationText("Body types"));
-        assertEquals("Choose Gender", CharacterReplacements.restoreCharacterCreationText("Choose Body type"));
+        assertEquals("Gender", MakeoverReplacements.restoreCharacterCreationText("Body type"));
+        assertEquals("Gender", MakeoverReplacements.restoreCharacterCreationText("Body types"));
+        assertEquals("Choose Gender", MakeoverReplacements.restoreCharacterCreationText("Choose Body type"));
     }
 
     @Test
     public void matchesShaveMenuOption()
     {
-        assertEquals(true, CharacterReplacements.isShaveMenuOption("Shave"));
-        assertEquals(true, CharacterReplacements.isShaveMenuOption("<col=ff9040>Shave</col>"));
-        assertEquals(false, CharacterReplacements.isShaveMenuOption("Talk-to"));
-        assertEquals(false, CharacterReplacements.isShaveMenuOption(null));
+        assertEquals(true, MakeoverReplacements.isShaveMenuOption("Shave"));
+        assertEquals(true, MakeoverReplacements.isShaveMenuOption("<col=ff9040>Shave</col>"));
+        assertEquals(false, MakeoverReplacements.isShaveMenuOption("Talk-to"));
+        assertEquals(false, MakeoverReplacements.isShaveMenuOption(null));
     }
 
     @Test
     public void matchesFacialHairCategoryLabel()
     {
-        assertEquals(true, CharacterReplacements.isFacialHairCategoryLabel("Facial hair"));
-        assertEquals(true, CharacterReplacements.isFacialHairCategoryLabel("<col=ff9040>Facial hair</col>"));
-        assertEquals(false, CharacterReplacements.isFacialHairCategoryLabel("Hair"));
-        assertEquals(false, CharacterReplacements.isFacialHairCategoryLabel(null));
+        assertEquals(true, MakeoverReplacements.isFacialHairCategoryLabel("Facial hair"));
+        assertEquals(true, MakeoverReplacements.isFacialHairCategoryLabel("<col=ff9040>Facial hair</col>"));
+        assertEquals(false, MakeoverReplacements.isFacialHairCategoryLabel("Hair"));
+        assertEquals(false, MakeoverReplacements.isFacialHairCategoryLabel(null));
     }
 }

@@ -12,12 +12,12 @@ import net.runelite.api.Player;
 import net.runelite.api.PlayerComposition;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.gameval.DBTableID;
+// import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.api.widgets.Widget;
 
-final class CharacterReplacements
+final class MakeoverReplacements
 {
     private static final int BODY_TYPE_B = 1;
     private static final int MAX_HAIR_STYLE_SKIPS = 64;
@@ -31,51 +31,51 @@ final class CharacterReplacements
     private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final Pattern STYLE_NAME_NORMALIZER = Pattern.compile("[^a-z0-9]");
 
-    private static final int[] LEGACY_MASCULINE_HAIR_ROWS = {
-        DBTableID.HairStyles.Row.BALD,
-        DBTableID.HairStyles.Row.DREADLOCKS,
-        DBTableID.HairStyles.Row.LONG,
-        DBTableID.HairStyles.Row.MEDIUM,
-        DBTableID.HairStyles.Row.TONSURE,
-        DBTableID.HairStyles.Row.SHORT,
-        DBTableID.HairStyles.Row.CROPPED,
-        DBTableID.HairStyles.Row.WILDSPIKES,
-        DBTableID.HairStyles.Row.SPIKES,
-        DBTableID.HairStyles.Row.MOHAWK,
-        DBTableID.HairStyles.Row.WINDBRAIDS,
-        DBTableID.HairStyles.Row.QUIFF,
-        DBTableID.HairStyles.Row.SAMURAI,
-        DBTableID.HairStyles.Row.PRINCELY,
-        DBTableID.HairStyles.Row.CURTAINS,
-        DBTableID.HairStyles.Row.LONGCURTAINS,
-        DBTableID.HairStyles.Row.FRONTSPLIT,
-        DBTableID.HairStyles.Row.TOUSLED,
-        DBTableID.HairStyles.Row.SIDEWEDGE,
-        DBTableID.HairStyles.Row.FRONTWEDGE,
-        DBTableID.HairStyles.Row.FRONTSPIKES,
-        DBTableID.HairStyles.Row.FROHAWK,
-        DBTableID.HairStyles.Row.REARSKIRT,
-        DBTableID.HairStyles.Row.WARRIORMONK
-    };
+    // private static final int[] LEGACY_MASCULINE_HAIR_ROWS = {
+    //     DBTableID.HairStyles.Row.BALD,
+    //     DBTableID.HairStyles.Row.DREADLOCKS,
+    //     DBTableID.HairStyles.Row.LONG,
+    //     DBTableID.HairStyles.Row.MEDIUM,
+    //     DBTableID.HairStyles.Row.TONSURE,
+    //     DBTableID.HairStyles.Row.SHORT,
+    //     DBTableID.HairStyles.Row.CROPPED,
+    //     DBTableID.HairStyles.Row.WILDSPIKES,
+    //     DBTableID.HairStyles.Row.SPIKES,
+    //     DBTableID.HairStyles.Row.MOHAWK,
+    //     DBTableID.HairStyles.Row.WINDBRAIDS,
+    //     DBTableID.HairStyles.Row.QUIFF,
+    //     DBTableID.HairStyles.Row.SAMURAI,
+    //     DBTableID.HairStyles.Row.PRINCELY,
+    //     DBTableID.HairStyles.Row.CURTAINS,
+    //     DBTableID.HairStyles.Row.LONGCURTAINS,
+    //     DBTableID.HairStyles.Row.FRONTSPLIT,
+    //     DBTableID.HairStyles.Row.TOUSLED,
+    //     DBTableID.HairStyles.Row.SIDEWEDGE,
+    //     DBTableID.HairStyles.Row.FRONTWEDGE,
+    //     DBTableID.HairStyles.Row.FRONTSPIKES,
+    //     DBTableID.HairStyles.Row.FROHAWK,
+    //     DBTableID.HairStyles.Row.REARSKIRT,
+    //     DBTableID.HairStyles.Row.WARRIORMONK
+    // };
 
-    private static final int[] LEGACY_FEMININE_HAIR_ROWS = {
-        DBTableID.HairStyles.Row.BALD,
-        DBTableID.HairStyles.Row.LONG,
-        DBTableID.HairStyles.Row.MEDIUM,
-        DBTableID.HairStyles.Row.SHORT,
-        DBTableID.HairStyles.Row.CROPPED,
-        DBTableID.HairStyles.Row.BUN,
-        DBTableID.HairStyles.Row.PIGTAILS,
-        DBTableID.HairStyles.Row.EARMUFFS,
-        DBTableID.HairStyles.Row.SIDEPONY,
-        DBTableID.HairStyles.Row.CURLS,
-        DBTableID.HairStyles.Row.PONYTAIL,
-        DBTableID.HairStyles.Row.BRAIDS,
-        DBTableID.HairStyles.Row.BUNCHES,
-        DBTableID.HairStyles.Row.BOB,
-        DBTableID.HairStyles.Row.LAYERED,
-        DBTableID.HairStyles.Row.STRAIGHT
-    };
+    // private static final int[] LEGACY_FEMININE_HAIR_ROWS = {
+    //     DBTableID.HairStyles.Row.BALD,
+    //     DBTableID.HairStyles.Row.LONG,
+    //     DBTableID.HairStyles.Row.MEDIUM,
+    //     DBTableID.HairStyles.Row.SHORT,
+    //     DBTableID.HairStyles.Row.CROPPED,
+    //     DBTableID.HairStyles.Row.BUN,
+    //     DBTableID.HairStyles.Row.PIGTAILS,
+    //     DBTableID.HairStyles.Row.EARMUFFS,
+    //     DBTableID.HairStyles.Row.SIDEPONY,
+    //     DBTableID.HairStyles.Row.CURLS,
+    //     DBTableID.HairStyles.Row.PONYTAIL,
+    //     DBTableID.HairStyles.Row.BRAIDS,
+    //     DBTableID.HairStyles.Row.BUNCHES,
+    //     DBTableID.HairStyles.Row.BOB,
+    //     DBTableID.HairStyles.Row.LAYERED,
+    //     DBTableID.HairStyles.Row.STRAIGHT
+    // };
 
     private static final int[] PLAYER_DESIGN_PRONOUN_WIDGETS = {
         InterfaceID.PlayerDesign.DROPDOWN_CONTAINER,
@@ -112,15 +112,13 @@ final class CharacterReplacements
     };
 
     private final Map<Integer, WidgetSnapshot> snapshots = new HashMap<>();
+    private final Set<Integer> forcedHiddenWidgetIds = new HashSet<>();
     private final Set<String> knownHairStyles = new HashSet<>();
     private final Set<String> legacyMasculineHairStyles = new HashSet<>();
     private final Set<String> legacyFeminineHairStyles = new HashSet<>();
-    private boolean hairStyleNamesLoaded;
 
     void apply(Client client)
     {
-        loadHairStyleNames(client);
-
         boolean interfaceOpen = applyPlayerDesign(client);
         interfaceOpen |= applyMakeoverMage(client);
         interfaceOpen |= applyMakeover(client);
@@ -128,12 +126,12 @@ final class CharacterReplacements
         if (!interfaceOpen)
         {
             snapshots.clear();
+            forcedHiddenWidgetIds.clear();
         }
     }
 
     boolean handleMenuOptionClicked(Client client, MenuOptionClicked event)
     {
-        loadHairStyleNames(client);
         return handlePlayerDesignHairClick(client, event) || handleMakeoverHairClick(client, event);
     }
 
@@ -159,6 +157,7 @@ final class CharacterReplacements
         }
 
         snapshots.clear();
+        forcedHiddenWidgetIds.clear();
     }
 
     private boolean applyPlayerDesign(Client client)
@@ -323,7 +322,7 @@ final class CharacterReplacements
         if (!root)
         {
             boolean hide = ownDisallowed || (childDisallowed && hasInteraction(widget));
-            if (hide || snapshots.containsKey(widget.getId()))
+            if (hide || forcedHiddenWidgetIds.contains(widget.getId()))
             {
                 setHidden(widget, hide);
             }
@@ -372,7 +371,7 @@ final class CharacterReplacements
         if (!root)
         {
             boolean hide = female && (ownMatch || (childMatch && hasInteraction(widget)));
-            if (hide || snapshots.containsKey(widget.getId()))
+            if (hide || forcedHiddenWidgetIds.contains(widget.getId()))
             {
                 setHidden(widget, hide);
             }
@@ -562,7 +561,17 @@ final class CharacterReplacements
     {
         snapshot(widget);
 
-        WidgetSnapshot snapshot = snapshots.get(widget.getId());
+        int widgetId = widget.getId();
+        if (hidden)
+        {
+            forcedHiddenWidgetIds.add(widgetId);
+        }
+        else
+        {
+            forcedHiddenWidgetIds.remove(widgetId);
+        }
+
+        WidgetSnapshot snapshot = snapshots.get(widgetId);
         boolean targetHidden = hidden || snapshot.hidden;
         if (widget.isSelfHidden() != targetHidden)
         {
@@ -594,131 +603,6 @@ final class CharacterReplacements
     private Set<String> getAllowedHairStyles(boolean female)
     {
         return female ? legacyFeminineHairStyles : legacyMasculineHairStyles;
-    }
-
-    private void loadHairStyleNames(Client client)
-    {
-        if (hairStyleNamesLoaded)
-        {
-            return;
-        }
-
-        addFallbackHairStyleNames();
-        addKnownHairStyleNames(client);
-        addHairStyleNames(client, legacyMasculineHairStyles, LEGACY_MASCULINE_HAIR_ROWS);
-        addHairStyleNames(client, legacyFeminineHairStyles, LEGACY_FEMININE_HAIR_ROWS);
-        hairStyleNamesLoaded = true;
-    }
-
-    private void addKnownHairStyleNames(Client client)
-    {
-        try
-        {
-            for (int row : client.getDBTableRows(DBTableID.HairStyles.ID))
-            {
-                String name = getHairStyleName(client, row);
-                if (name != null)
-                {
-                    knownHairStyles.add(normalizeStyleName(name));
-                }
-            }
-        }
-        catch (RuntimeException ex)
-        {
-            return;
-        }
-    }
-
-    private void addHairStyleNames(Client client, Set<String> names, int[] rows)
-    {
-        for (int row : rows)
-        {
-            String name = getHairStyleName(client, row);
-            if (name != null)
-            {
-                String normalized = normalizeStyleName(name);
-                knownHairStyles.add(normalized);
-                names.add(normalized);
-            }
-        }
-    }
-
-    private String getHairStyleName(Client client, int row)
-    {
-        try
-        {
-            Object[] values = client.getDBTableField(row, DBTableID.HairStyles.COL_NAME, 0);
-            if (values.length > 0 && values[0] instanceof String)
-            {
-                return (String) values[0];
-            }
-        }
-        catch (RuntimeException ex)
-        {
-            return null;
-        }
-
-        return null;
-    }
-
-    private void addFallbackHairStyleNames()
-    {
-        addAll(
-            legacyMasculineHairStyles,
-            "Bald",
-            "Dreadlocks",
-            "Long",
-            "Medium",
-            "Tonsure",
-            "Short",
-            "Cropped",
-            "Wild spikes",
-            "Spikes",
-            "Mohawk",
-            "Wind braids",
-            "Quiff",
-            "Samurai",
-            "Princely",
-            "Curtains",
-            "Long curtains",
-            "Front split",
-            "Tousled",
-            "Side wedge",
-            "Front wedge",
-            "Front spikes",
-            "Frohawk",
-            "Rear skirt",
-            "Warrior monk"
-        );
-        addAll(
-            legacyFeminineHairStyles,
-            "Bald",
-            "Long",
-            "Medium",
-            "Short",
-            "Cropped",
-            "Bun",
-            "Pigtails",
-            "Earmuffs",
-            "Side pony",
-            "Curls",
-            "Ponytail",
-            "Braids",
-            "Bunches",
-            "Bob",
-            "Layered",
-            "Straight"
-        );
-    }
-
-    private void addAll(Set<String> names, String... values)
-    {
-        for (String value : values)
-        {
-            String normalized = normalizeStyleName(value);
-            knownHairStyles.add(normalized);
-            names.add(normalized);
-        }
     }
 
     private static String normalizeStyleName(String text)
