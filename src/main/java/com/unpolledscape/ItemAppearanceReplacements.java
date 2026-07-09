@@ -1,23 +1,30 @@
 package com.unpolledscape;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 
 /**
  * Reverts cosmetic item recolors (ground/inventory/bank icon appearance) back to their
- * pre-recolor look. Mutates {@link ItemComposition} visual fields in place via the public
- * setter API (inventoryModel, recolor/retexture arrays, 2D icon rotation) and snapshots the
- * original values so changes can be cleanly reverted.
+ * pre-recolor look by copying the visual fields of a legacy "target" item onto each modern
+ * "source" item.
  *
- * IMPORTANT: {@link #apply(Client)} and {@link #restore(Client)} mutate shared client state
- * (ItemComposition instances are cached/shared) and MUST only be invoked on the client thread.
- * Calling from any other thread (e.g. the AWT/UI thread during startUp()/onConfigChanged())
- * races with the render thread reading these same fields and can corrupt the item's rendered
- * model/colors mid-update.
+ * The mutation is applied reactively in {@link #applyTo(Client, ItemComposition)}, which the
+ * plugin invokes from the {@code PostItemComposition} event. That event fires every time an
+ * item composition is (re)created, so it is the single source of truth for the swap.
+ *
+ * {@link #apply(Client)} / {@link #restore(Client)} simply flush the client's item caches. This
+ * evicts every cached composition (so it is reloaded, re-firing {@code PostItemComposition}) and
+ * clears the pre-rendered model/sprite caches (so the icon/ground model is rebuilt). When the
+ * feature is disabled the reload restores the untouched originals straight from the game cache
+ * because {@code PostItemComposition} no longer mutates them, so no manual snapshotting is needed.
+ *
+ * IMPORTANT: every method here touches shared client caches/compositions and MUST only be invoked
+ * on the client thread.
  */
 final class ItemAppearanceReplacements
 {
@@ -48,9 +55,6 @@ final class ItemAppearanceReplacements
     private static final int DORGESHUUN_CROSSBOW_ID = 8880;
 
     private static final Map<Integer, Integer> REPLACEMENTS = createReplacementMap();
-
-    // Tracks the original visual state of each source item so apply()/restore() are reversible.
-    private final Map<Integer, ItemSnapshot> snapshots = new HashMap<>();
 
     Map<Integer, Integer> replacementMap(Client client)
     {
@@ -92,22 +96,30 @@ final class ItemAppearanceReplacements
         return replacements;
     }
 
+    /**
+     * Enables the swap. Flushing the caches forces every affected item to be reloaded (which
+     * re-fires {@code PostItemComposition} and re-applies the swap via {@link #applyTo}) and
+     * re-rendered.
+     */
     void apply(Client client)
     {
-        boolean anyChanged = false;
-
-        for (Map.Entry<Integer, Integer> replacement : REPLACEMENTS.entrySet())
-        {
-            ItemComposition source = client.getItemDefinition(replacement.getKey());
-            anyChanged |= applyTo(client, source);
-        }
-
-        if (anyChanged)
-        {
-            invalidateItemCaches(client);
-        }
+        invalidateItemCaches(client);
     }
 
+    /**
+     * Disables the swap. Flushing the caches reloads the untouched originals from the game cache;
+     * because {@code PostItemComposition} is gated on the feature being enabled, the reload leaves
+     * them unmodified.
+     */
+    void restore(Client client)
+    {
+        invalidateItemCaches(client);
+    }
+
+    /**
+     * Copies the legacy target item's visual fields onto {@code source}. Invoked for every freshly
+     * created composition; a no-op for items that aren't part of the replacement set.
+     */
     boolean applyTo(Client client, ItemComposition source)
     {
         if (source == null)
@@ -127,46 +139,14 @@ final class ItemAppearanceReplacements
             return false;
         }
 
-        // Snapshot once, before the first mutation, so restore() can revert to the true original.
-        ItemSnapshot snapshot = snapshots.computeIfAbsent(source.getId(), id -> ItemSnapshot.capture(source));
-        return copyVisuals(source, target, snapshot);
-    }
-
-    void restore(Client client)
-    {
-        if (snapshots.isEmpty())
-        {
-            return;
-        }
-
-        boolean anyChanged = false;
-
-        for (Map.Entry<Integer, ItemSnapshot> entry : snapshots.entrySet())
-        {
-            ItemComposition source = client.getItemDefinition(entry.getKey());
-            if (source == null)
-            {
-                continue;
-            }
-
-            anyChanged |= entry.getValue().applyTo(source);
-        }
-
-        snapshots.clear();
-
-        if (anyChanged)
-        {
-            invalidateItemCaches(client);
-        }
+        return copyVisuals(source, target);
     }
 
     /**
-     * Copies the visual fields that control an item's ground/inventory/bank icon appearance
-     * from {@code target} onto {@code source}. Falls back to the item's own original snapshot
-     * value when the target doesn't provide one, so unrelated fields aren't zeroed out.
-     * Returns true if anything actually changed.
+     * Copies the visual fields that control an item's ground/inventory/bank icon appearance from
+     * {@code target} onto {@code source}. Returns true if anything actually changed.
      */
-    private static boolean copyVisuals(ItemComposition source, ItemComposition target, ItemSnapshot snapshot)
+    private static boolean copyVisuals(ItemComposition source, ItemComposition target)
     {
         boolean changed = false;
 
@@ -177,21 +157,21 @@ final class ItemAppearanceReplacements
             changed = true;
         }
 
-        changed |= applyInt(target.getInventoryModel(), source::getInventoryModel, source::setInventoryModel);
-        changed |= applyShortArray(target.getColorToReplace(), source::getColorToReplace, source::setColorToReplace);
-        changed |= applyShortArray(target.getColorToReplaceWith(), source::getColorToReplaceWith, source::setColorToReplaceWith);
-        changed |= applyShortArray(target.getTextureToReplace(), source::getTextureToReplace, source::setTextureToReplace);
-        changed |= applyShortArray(target.getTextureToReplaceWith(), source::getTextureToReplaceWith, source::setTextureToReplaceWith);
-        changed |= applyInt(target.getXan2d(), source::getXan2d, source::setXan2d);
-        changed |= applyInt(target.getYan2d(), source::getYan2d, source::setYan2d);
-        changed |= applyInt(target.getZan2d(), source::getZan2d, source::setZan2d);
+        changed |= applyInt(target.getInventoryModel(), source.getInventoryModel(), source::setInventoryModel);
+        changed |= applyShortArray(target.getColorToReplace(), source.getColorToReplace(), source::setColorToReplace);
+        changed |= applyShortArray(target.getColorToReplaceWith(), source.getColorToReplaceWith(), source::setColorToReplaceWith);
+        changed |= applyShortArray(target.getTextureToReplace(), source.getTextureToReplace(), source::setTextureToReplace);
+        changed |= applyShortArray(target.getTextureToReplaceWith(), source.getTextureToReplaceWith(), source::setTextureToReplaceWith);
+        changed |= applyInt(target.getXan2d(), source.getXan2d(), source::setXan2d);
+        changed |= applyInt(target.getYan2d(), source.getYan2d(), source::setYan2d);
+        changed |= applyInt(target.getZan2d(), source.getZan2d(), source::setZan2d);
 
         return changed;
     }
 
-    private static boolean applyInt(int desired, java.util.function.IntSupplier current, java.util.function.IntConsumer setter)
+    private static boolean applyInt(int desired, int current, IntConsumer setter)
     {
-        if (current.getAsInt() == desired)
+        if (current == desired)
         {
             return false;
         }
@@ -200,10 +180,10 @@ final class ItemAppearanceReplacements
         return true;
     }
 
-    private static boolean applyShortArray(short[] desired, java.util.function.Supplier<short[]> current, java.util.function.Consumer<short[]> setter)
+    private static boolean applyShortArray(short[] desired, short[] current, Consumer<short[]> setter)
     {
         short[] desiredCopy = desired == null ? null : desired.clone();
-        if (Arrays.equals(current.get(), desiredCopy))
+        if (Arrays.equals(current, desiredCopy))
         {
             return false;
         }
@@ -214,90 +194,10 @@ final class ItemAppearanceReplacements
 
     private static void invalidateItemCaches(Client client)
     {
-        // These caches hold pre-rendered models/sprites keyed by item id; without resetting them
-        // the client keeps drawing the old appearance even though the composition data changed.
+        // Evict cached compositions so they reload (re-firing PostItemComposition), and drop the
+        // pre-rendered models/sprites keyed by item id so the new appearance is actually drawn.
+        client.getItemCompositionCache().reset();
         client.getItemModelCache().reset();
         client.getItemSpriteCache().reset();
-    }
-
-    /**
-     * Immutable capture of an item's original visual fields, taken the first time apply()
-     * touches it, so restore() can put things back exactly as they were.
-     */
-    private static final class ItemSnapshot
-    {
-        private final String name;
-        private final int inventoryModel;
-        private final short[] colorToReplace;
-        private final short[] colorToReplaceWith;
-        private final short[] textureToReplace;
-        private final short[] textureToReplaceWith;
-        private final int xan2d;
-        private final int yan2d;
-        private final int zan2d;
-
-        private ItemSnapshot(
-            String name,
-            int inventoryModel,
-            short[] colorToReplace,
-            short[] colorToReplaceWith,
-            short[] textureToReplace,
-            short[] textureToReplaceWith,
-            int xan2d,
-            int yan2d,
-            int zan2d)
-        {
-            this.name = name;
-            this.inventoryModel = inventoryModel;
-            this.colorToReplace = colorToReplace;
-            this.colorToReplaceWith = colorToReplaceWith;
-            this.textureToReplace = textureToReplace;
-            this.textureToReplaceWith = textureToReplaceWith;
-            this.xan2d = xan2d;
-            this.yan2d = yan2d;
-            this.zan2d = zan2d;
-        }
-
-        private static ItemSnapshot capture(ItemComposition composition)
-        {
-            return new ItemSnapshot(
-                composition.getName(),
-                composition.getInventoryModel(),
-                cloneOrNull(composition.getColorToReplace()),
-                cloneOrNull(composition.getColorToReplaceWith()),
-                cloneOrNull(composition.getTextureToReplace()),
-                cloneOrNull(composition.getTextureToReplaceWith()),
-                composition.getXan2d(),
-                composition.getYan2d(),
-                composition.getZan2d()
-            );
-        }
-
-        private boolean applyTo(ItemComposition composition)
-        {
-            boolean changed = false;
-
-            if (name != null && !name.equals(composition.getName()))
-            {
-                composition.setName(name);
-                changed = true;
-            }
-
-            changed |= applyInt(inventoryModel, composition::getInventoryModel, composition::setInventoryModel);
-            changed |= applyShortArray(colorToReplace, composition::getColorToReplace, composition::setColorToReplace);
-            changed |= applyShortArray(colorToReplaceWith, composition::getColorToReplaceWith, composition::setColorToReplaceWith);
-            changed |= applyShortArray(textureToReplace, composition::getTextureToReplace, composition::setTextureToReplace);
-            changed |= applyShortArray(textureToReplaceWith, composition::getTextureToReplaceWith, composition::setTextureToReplaceWith);
-            changed |= applyInt(xan2d, composition::getXan2d, composition::setXan2d);
-            changed |= applyInt(yan2d, composition::getYan2d, composition::setYan2d);
-            changed |= applyInt(zan2d, composition::getZan2d, composition::setZan2d);
-
-            return changed;
-        }
-
-        private static short[] cloneOrNull(short[] value)
-        {
-            return value == null ? null : value.clone();
-        }
     }
 }
