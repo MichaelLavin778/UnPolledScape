@@ -120,12 +120,12 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.handleMenuEntryAdded(client, event);
         }
 
-        // if (config.items()
-        //     && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
-        //         || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
-        //     client.getMenu().removeMenuEntry(event.getMenuEntry());
-        //     return;
-        // }
+        if (config.items()
+            && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
+                || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
+            client.getMenu().removeMenuEntry(event.getMenuEntry());
+            return;
+        }
 
         if (config.npcs()) {
             if (isHiddenNpcMenuEntry(event.getMenuEntry())) {
