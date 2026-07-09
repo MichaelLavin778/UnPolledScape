@@ -14,7 +14,6 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PlayerChanged;
-import net.runelite.api.events.PostItemComposition;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
@@ -25,6 +24,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 @Slf4j
 @PluginDescriptor(name = "UnPolledScape")
@@ -53,6 +53,12 @@ public class UnPolledScapePlugin extends Plugin {
     @Inject
     private RenderCallbackManager renderCallbackManager;
 
+    @Inject
+    private OverlayManager overlayManager;
+
+    @Inject
+    private ItemAppearanceOverlay itemAppearanceOverlay;
+
     private final MakeoverReplacements makeoverReplacements = new MakeoverReplacements();
     private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
     private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
@@ -70,6 +76,7 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void startUp() {
         renderCallbackManager.register(renderCallback);
+        overlayManager.add(itemAppearanceOverlay);
         clientThread.invoke(this::checklist);
         log.debug("UnPolledScape started");
     }
@@ -77,9 +84,9 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void shutDown() {
         renderCallbackManager.unregister(renderCallback);
+        overlayManager.remove(itemAppearanceOverlay);
         clientThread.invoke(() -> {
             makeoverReplacements.restore(client);
-            itemAppearanceReplacements.restore(client);
             playerAppearanceReplacements.restore(client, itemAppearanceReplacements.replacementMap(client));
             npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
@@ -160,17 +167,6 @@ public class UnPolledScapePlugin extends Plugin {
         playerAppearanceReplacements.apply(client, itemAppearanceReplacements.replacementMap(client));
     }
 
-    @Subscribe
-    public void onPostItemComposition(PostItemComposition event)
-    {
-        if (!config.items())
-        {
-            return;
-        }
-
-        itemAppearanceReplacements.applyTo(client, event.getItemComposition());
-    }
-
     private void checklist() {
         if (config.makeover()) {
             makeoverReplacements.apply(client);
@@ -179,11 +175,8 @@ public class UnPolledScapePlugin extends Plugin {
         }
 
         Map<Integer, Integer> replacementMap = itemAppearanceReplacements.replacementMap(client);
-        if (config.items()) {
-            itemAppearanceReplacements.apply(client);
-        } else {
-            itemAppearanceReplacements.restore(client);
-        }
+        // Item icon replacement is handled by ItemAppearanceOverlay, which gates itself on
+        // config.items() and requires no apply/restore since it never mutates client state.
 
         if (config.players()) {
             playerAppearanceReplacements.apply(client, replacementMap);
