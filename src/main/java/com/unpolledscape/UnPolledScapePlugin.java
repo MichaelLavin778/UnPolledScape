@@ -10,6 +10,7 @@ import net.runelite.api.NPC;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.Renderable;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
@@ -171,6 +172,17 @@ public class UnPolledScapePlugin extends Plugin {
         }
 
         playerAppearanceReplacements.apply(client, itemAppearanceReplacements.replacementMap(client));
+    }
+
+    @Subscribe
+    public void onGameTick(GameTick event)
+    {
+        // The makeover/hairdresser interface builds its options dynamically and repopulates on body
+        // type / category changes, so re-apply while it is open (config-change alone isn't enough).
+        if (config.makeover())
+        {
+            makeoverReplacements.apply(client);
+        }
     }
 
     private void checklist() {
