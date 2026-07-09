@@ -1,20 +1,42 @@
 package com.unpolledscape;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.HashSet;
 import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.PlayerComposition;
 import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.kit.KitType;
 
+/**
+ * Hides selected worn items on player characters (self and others) while keeping the underlying
+ * body visible.
+ *
+ * A player's {@link PlayerComposition#getEquipmentIds()} entry for a slot is either {@code 0}
+ * (nothing), a kit ({@link PlayerComposition#KIT_OFFSET}..{@link PlayerComposition#ITEM_OFFSET})
+ * or an item (&gt;= {@link PlayerComposition#ITEM_OFFSET}). For equipment-only slots (head, cape,
+ * amulet, weapon, ...) simply clearing the slot to {@code 0} hides the item. For body slots such
+ * as the torso, the item replaces the base body kit and the client no longer knows the character's
+ * real body model, so clearing it to {@code 0} would make the torso (and its sleeve-covered arms)
+ * disappear entirely. To avoid that we substitute a plain default body kit for the affected
+ * gender, leaving a visible body with no item.
+ *
+ * IMPORTANT: mutates live composition state and MUST only be invoked on the client thread.
+ */
 final class PlayerAppearanceReplacements
 {
     private static final int FEMALE_GENDER = 1;
+
+    // Plain "naked" default body kit ids used to reveal a body when a covering item is hidden.
+    // Values taken from OSRS character-creation kit data (TorsoKit.PLAIN / ArmsKit.REGULAR).
+    private static final int MALE_TORSO_KIT = 18;
+    private static final int FEMALE_TORSO_KIT = 56;
+    private static final int MALE_ARMS_KIT = 26;
+    private static final int FEMALE_ARMS_KIT = 61;
 
     private final Map<PlayerComposition, CompositionOverrideState> compositionOverrides = new IdentityHashMap<>();
     private final Map<PlayerComposition, Integer> femaleJawSnapshots = new IdentityHashMap<>();
@@ -23,22 +45,37 @@ final class PlayerAppearanceReplacements
 
     void apply(Client client, Map<Integer, Integer> replacements)
     {
-        applyPlayerEquipmentOverrides(client, replacements);
+        reapplyEquipmentHiding(client, replacements.keySet());
         applyFemaleBeardSuppression(client);
     }
 
     void restore(Client client, Map<Integer, Integer> replacements)
     {
-        restorePlayerEquipmentOverrides(replacements);
+        restoreHiddenEquipment();
         restoreFemaleBeards();
     }
 
-    private void applyPlayerEquipmentOverrides(Client client, Map<Integer, Integer> replacements)
+    /**
+     * Reverts any previous overrides using the current live values, then re-hides from scratch.
+     * Player appearance is rebuilt by the game whenever it changes, so recomputing on every
+     * {@code PlayerChanged} keeps the overrides in sync without leaving stale state behind.
+     */
+    private void reapplyEquipmentHiding(Client client, Set<Integer> itemsToHide)
     {
-        if (replacements.isEmpty())
+        restoreHiddenEquipment();
+
+        if (itemsToHide.isEmpty())
         {
             return;
         }
+
+        hideEquipment(client, itemsToHide);
+    }
+
+    private void hideEquipment(Client client, Set<Integer> itemsToHide)
+    {
+        int torsoIndex = KitType.TORSO.getIndex();
+        int armsIndex = KitType.ARMS.getIndex();
 
         for (Player player : client.getTopLevelWorldView().players())
         {
@@ -59,41 +96,36 @@ final class PlayerAppearanceReplacements
                 continue;
             }
 
-            CompositionOverrideState state = compositionOverrides.computeIfAbsent(composition, c -> new CompositionOverrideState());
+            int gender = composition.getGender();
+            CompositionOverrideState state = null;
             boolean changed = false;
 
             for (int slot = 0; slot < equipment.length; slot++)
             {
-                int current = equipment[slot];
-                Integer replacementEquipmentId = toReplacementEquipmentId(current, replacements);
-                if (replacementEquipmentId != null)
-                {
-                    state.originalBySlot.putIfAbsent(slot, current);
-                    if (current != replacementEquipmentId)
-                    {
-                        equipment[slot] = replacementEquipmentId;
-                        changed = true;
-                    }
-
-                    continue;
-                }
-
-                Integer original = state.originalBySlot.get(slot);
-                if (original == null)
+                if (!isHiddenItem(equipment[slot], itemsToHide))
                 {
                     continue;
                 }
 
-                Integer expectedReplacement = toReplacementEquipmentId(original, replacements);
-                if (expectedReplacement == null || current != expectedReplacement)
+                if (state == null)
                 {
-                    state.originalBySlot.remove(slot);
+                    state = compositionOverrides.computeIfAbsent(composition, c -> new CompositionOverrideState());
                 }
-            }
 
-            if (state.originalBySlot.isEmpty())
-            {
-                compositionOverrides.remove(composition);
+                state.originalBySlot.put(slot, equipment[slot]);
+                equipment[slot] = hiddenValueForSlot(slot, gender);
+                changed = true;
+
+                // A hidden torso item usually also covered the arms, leaving the arms slot empty.
+                // Reveal a default arms kit so the freshly shown body isn't missing its arms.
+                if (slot == torsoIndex
+                    && armsIndex >= 0
+                    && armsIndex < equipment.length
+                    && equipment[armsIndex] == 0)
+                {
+                    state.originalBySlot.put(armsIndex, equipment[armsIndex]);
+                    equipment[armsIndex] = hiddenValueForSlot(armsIndex, gender);
+                }
             }
 
             if (changed)
@@ -103,20 +135,21 @@ final class PlayerAppearanceReplacements
         }
     }
 
-    private void restorePlayerEquipmentOverrides(Map<Integer, Integer> replacements)
+    private void restoreHiddenEquipment()
     {
         for (Entry<PlayerComposition, CompositionOverrideState> entry : compositionOverrides.entrySet())
         {
             PlayerComposition composition = entry.getKey();
-            CompositionOverrideState state = entry.getValue();
             int[] equipment = composition.getEquipmentIds();
             if (equipment == null)
             {
                 continue;
             }
 
+            int gender = composition.getGender();
             boolean changed = false;
-            for (Entry<Integer, Integer> slotEntry : state.originalBySlot.entrySet())
+
+            for (Entry<Integer, Integer> slotEntry : entry.getValue().originalBySlot.entrySet())
             {
                 int slot = slotEntry.getKey();
                 if (slot < 0 || slot >= equipment.length)
@@ -124,11 +157,11 @@ final class PlayerAppearanceReplacements
                     continue;
                 }
 
-                int original = slotEntry.getValue();
-                Integer expectedReplacement = toReplacementEquipmentId(original, replacements);
-                if (expectedReplacement != null && equipment[slot] == expectedReplacement)
+                // Only restore slots the game hasn't since changed on its own, i.e. that still
+                // hold the value we substituted.
+                if (equipment[slot] == hiddenValueForSlot(slot, gender))
                 {
-                    equipment[slot] = original;
+                    equipment[slot] = slotEntry.getValue();
                     changed = true;
                 }
             }
@@ -142,21 +175,33 @@ final class PlayerAppearanceReplacements
         compositionOverrides.clear();
     }
 
-    private static Integer toReplacementEquipmentId(int equipmentId, Map<Integer, Integer> replacements)
+    private static boolean isHiddenItem(int equipmentId, Set<Integer> itemsToHide)
     {
         if (equipmentId < PlayerComposition.ITEM_OFFSET)
         {
-            return null;
+            return false;
         }
 
-        int itemId = equipmentId - PlayerComposition.ITEM_OFFSET;
-        Integer replacementItemId = replacements.get(itemId);
-        if (replacementItemId == null)
+        return itemsToHide.contains(equipmentId - PlayerComposition.ITEM_OFFSET);
+    }
+
+    /**
+     * The equipment value to substitute for a hidden item. Body slots get a plain default kit so
+     * the body stays visible; every other slot is cleared to nothing.
+     */
+    private static int hiddenValueForSlot(int slot, int gender)
+    {
+        if (slot == KitType.TORSO.getIndex())
         {
-            return null;
+            return PlayerComposition.KIT_OFFSET + (gender == FEMALE_GENDER ? FEMALE_TORSO_KIT : MALE_TORSO_KIT);
         }
 
-        return replacementItemId + PlayerComposition.ITEM_OFFSET;
+        if (slot == KitType.ARMS.getIndex())
+        {
+            return PlayerComposition.KIT_OFFSET + (gender == FEMALE_GENDER ? FEMALE_ARMS_KIT : MALE_ARMS_KIT);
+        }
+
+        return 0;
     }
 
     private void applyFemaleBeardSuppression(Client client)
