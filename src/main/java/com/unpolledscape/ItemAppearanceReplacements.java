@@ -14,6 +14,13 @@ import net.runelite.api.ItemComposition;
  * copying the legacy item's visual fields onto the modern item's {@link ItemComposition} and then
  * flushing the client's item caches so every surface re-renders.
  *
+ * <p>Note: RuneLite exposes no setter for an item's icon zoom/scale/offset, so the reskinned model
+ * renders at the original item's scale. On the inventory/bank/equipment slots (where scale is most
+ * noticeable) {@link ItemAppearanceOverlay} paints the correctly-scaled icon on top; this class
+ * guarantees the item underneath that overlay is already the replacement so nothing of the original
+ * shows through, and it is the sole mechanism on model surfaces the overlay cannot reach
+ * (chat/quest dialogs, dropped items).
+ *
  * <p>Restoration is deliberately belt-and-braces so toggling the feature (or the plugin) always
  * reverts cleanly:
  * <ul>
@@ -65,6 +72,15 @@ final class ItemAppearanceReplacements
     boolean isReplacementSourceItem(int itemId)
     {
         return REPLACEMENTS.containsKey(itemId);
+    }
+
+    /**
+     * The legacy item a modern item is reskinned as, or {@code null} if the item is not replaced.
+     * Used by {@link ItemAppearanceOverlay} to paint the correctly-scaled slot icon.
+     */
+    static Integer getReplacementItemId(int itemId)
+    {
+        return REPLACEMENTS.get(itemId);
     }
 
     /**

@@ -26,6 +26,7 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.OverlayManager;
 
 @Slf4j
 @PluginDescriptor(name = "UnPolledScape")
@@ -54,6 +55,12 @@ public class UnPolledScapePlugin extends Plugin {
     @Inject
     private RenderCallbackManager renderCallbackManager;
 
+    @Inject
+    private OverlayManager overlayManager;
+
+    @Inject
+    private ItemAppearanceOverlay itemAppearanceOverlay;
+
     private final MakeoverReplacements makeoverReplacements = new MakeoverReplacements();
     private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
     private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
@@ -71,6 +78,7 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void startUp() {
         renderCallbackManager.register(renderCallback);
+        overlayManager.add(itemAppearanceOverlay);
         clientThread.invoke(this::checklist);
         log.debug("UnPolledScape started");
     }
@@ -78,6 +86,7 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void shutDown() {
         renderCallbackManager.unregister(renderCallback);
+        overlayManager.remove(itemAppearanceOverlay);
         clientThread.invoke(() -> {
             makeoverReplacements.restore(client);
             itemAppearanceReplacements.restore(client);
