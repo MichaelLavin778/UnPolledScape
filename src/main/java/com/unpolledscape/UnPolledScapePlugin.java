@@ -1,6 +1,8 @@
 package com.unpolledscape;
 
 import com.google.inject.Provides;
+
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
@@ -26,11 +28,88 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-import net.runelite.client.ui.overlay.OverlayManager;
+// import net.runelite.client.ui.overlay.OverlayManager;
 
 @Slf4j
 @PluginDescriptor(name = "UnPolledScape")
 public class UnPolledScapePlugin extends Plugin {
+    // ITEMS TO REPLACE
+    private static final int[] FLOWER_CROWN_IDS = {
+        27035, 27141, 27143, 27145, 27147, 27149, 27151, 27153, 27155
+    };
+    private static final int[] RAINBOW_SCARF_IDS = {
+        21314, 28108, 28109, 28110, 28111, 28112, 28113, 28114, 28115
+    };
+    private static final int[] RAINBOW_JUMPER_IDS = {
+        28116, 28118, 28119, 28120, 28121, 28122, 28123, 28124, 28125,
+    };
+    private static final int[] RAINBOW_CAPE_IDS = {
+        29489, 29491, 29493, 29495, 29497, 29499, 29501, 29503, 29505
+    };
+    private static final int[] RAINBOW_CROWN_SHIRT_IDS = {
+        29507, 29509, 29510, 29511, 29512, 29513, 29514, 29515, 29516
+    };
+    private static final int LOVE_CROSSBOW_ID = 28128;
+    private static final int POETS_JACKET_ID = 28126;
+
+    // ITEMS TO REPLACE WITH
+    private static final int HELM_OF_RAEDWALD_ID = 19687;
+    private static final int GNOME_SCARF_ID = 9470;
+    private static final int CLUE_HUNTER_GARB_ID = 19689;
+    private static final int CLUE_HUNTER_CLOAK_ID = 19697;
+    private static final int DORGESHUUN_CROSSBOW_ID = 8880;
+
+    private static final Map<Integer, Integer> REPLACEMENTS = createReplacementMap();
+
+    Map<Integer, Integer> replacementMap(Client client)
+    {
+        return REPLACEMENTS;
+    }
+
+    boolean isReplacementSourceItem(int itemId)
+    {
+        return REPLACEMENTS.containsKey(itemId);
+    }
+
+    /**
+     * The legacy item a modern item is reskinned as, or {@code null} if the item is not replaced.
+     * Used by {@link ItemAppearanceOverlay} to paint the correctly-scaled slot icon.
+     */
+    static Integer getReplacementItemId(int itemId)
+    {
+        return REPLACEMENTS.get(itemId);
+    }
+
+    private static Map<Integer, Integer> createReplacementMap()
+    {
+        Map<Integer, Integer> replacements = new LinkedHashMap<>();
+
+        for (int flowerCrownId : FLOWER_CROWN_IDS)
+        {
+            replacements.put(flowerCrownId, HELM_OF_RAEDWALD_ID);
+        }
+        for (int rainbowScarfId : RAINBOW_SCARF_IDS)
+        {
+            replacements.put(rainbowScarfId, GNOME_SCARF_ID);
+        }
+        for (int rainbowJumperId : RAINBOW_JUMPER_IDS)
+        {
+            replacements.put(rainbowJumperId, CLUE_HUNTER_GARB_ID);
+        }
+        for (int rainbowCapeId : RAINBOW_CAPE_IDS)
+        {
+            replacements.put(rainbowCapeId, CLUE_HUNTER_CLOAK_ID);
+        }
+        for (int rainbowCrownShirtId : RAINBOW_CROWN_SHIRT_IDS)
+        {
+            replacements.put(rainbowCrownShirtId, CLUE_HUNTER_GARB_ID);
+        }
+        replacements.put(LOVE_CROSSBOW_ID, DORGESHUUN_CROSSBOW_ID);
+        replacements.put(POETS_JACKET_ID, CLUE_HUNTER_GARB_ID);
+
+        return replacements;
+    }
+
     private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final int[] DIALOGUE_WIDGETS = {
         InterfaceID.ChatLeft.NAME,
@@ -55,14 +134,14 @@ public class UnPolledScapePlugin extends Plugin {
     @Inject
     private RenderCallbackManager renderCallbackManager;
 
-    @Inject
-    private OverlayManager overlayManager;
+    // @Inject
+    // private OverlayManager overlayManager;
 
-    @Inject
-    private ItemAppearanceOverlay itemAppearanceOverlay;
+    // @Inject
+    // private ItemAppearanceOverlay itemAppearanceOverlay;
 
     private final MakeoverReplacements makeoverReplacements = new MakeoverReplacements();
-    private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
+    // private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
     private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
     private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
     private final NpcDialogueReplacement npcDialogueReplacement = new NpcDialogueReplacement();
@@ -78,7 +157,7 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void startUp() {
         renderCallbackManager.register(renderCallback);
-        overlayManager.add(itemAppearanceOverlay);
+        // overlayManager.add(itemAppearanceOverlay);
         clientThread.invoke(this::checklist);
         log.debug("UnPolledScape started");
     }
@@ -86,11 +165,11 @@ public class UnPolledScapePlugin extends Plugin {
     @Override
     protected void shutDown() {
         renderCallbackManager.unregister(renderCallback);
-        overlayManager.remove(itemAppearanceOverlay);
+        // overlayManager.remove(itemAppearanceOverlay);
         clientThread.invoke(() -> {
             makeoverReplacements.restore(client);
-            itemAppearanceReplacements.restore(client);
-            playerAppearanceReplacements.restore(client, itemAppearanceReplacements.replacementMap(client));
+            // itemAppearanceReplacements.restore(client);
+            playerAppearanceReplacements.restore(client, REPLACEMENTS);
             npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
         });
@@ -180,7 +259,7 @@ public class UnPolledScapePlugin extends Plugin {
             return;
         }
 
-        playerAppearanceReplacements.apply(client, itemAppearanceReplacements.replacementMap(client));
+        playerAppearanceReplacements.apply(client, REPLACEMENTS);
     }
 
     @Subscribe
@@ -201,7 +280,6 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.restore(client);
         }
 
-        Map<Integer, Integer> replacementMap = itemAppearanceReplacements.replacementMap(client);
         // if (config.items()) {
         //     itemAppearanceReplacements.apply(client);
         // } else {
@@ -209,10 +287,10 @@ public class UnPolledScapePlugin extends Plugin {
         // }
 
         if (config.players()) {
-            playerAppearanceReplacements.apply(client, replacementMap);
+            playerAppearanceReplacements.apply(client, REPLACEMENTS);
         }
         else {
-            playerAppearanceReplacements.restore(client, replacementMap);
+            playerAppearanceReplacements.restore(client, REPLACEMENTS);
         }
 
         if (config.npcs()) {
@@ -234,7 +312,7 @@ public class UnPolledScapePlugin extends Plugin {
         return menuEntry != null
             && menuEntry.isItemOp()
             && "Change-style".equalsIgnoreCase(menuEntry.getOption())
-            && itemAppearanceReplacements.isReplacementSourceItem(menuEntry.getItemId());
+            && isReplacementSourceItem(menuEntry.getItemId());
     }
 
     private boolean isHiddenEnamourMenuEntry(MenuEntry menuEntry)

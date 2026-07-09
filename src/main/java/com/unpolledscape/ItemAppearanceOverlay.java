@@ -41,7 +41,7 @@ class ItemAppearanceOverlay extends WidgetItemOverlay
             return;
         }
 
-        Integer replacementId = ItemAppearanceReplacements.getReplacementItemId(itemId);
+        Integer replacementId = UnPolledScapePlugin.getReplacementItemId(itemId);
         if (replacementId == null)
         {
             return;
