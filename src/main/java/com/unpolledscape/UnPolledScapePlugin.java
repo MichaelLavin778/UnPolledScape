@@ -15,7 +15,7 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PlayerChanged;
-import net.runelite.api.events.PostItemComposition;
+// import net.runelite.api.events.PostItemComposition;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
@@ -120,12 +120,12 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.handleMenuEntryAdded(client, event);
         }
 
-        if (config.items()
-            && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
-                || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
-            client.getMenu().removeMenuEntry(event.getMenuEntry());
-            return;
-        }
+        // if (config.items()
+        //     && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
+        //         || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
+        //     client.getMenu().removeMenuEntry(event.getMenuEntry());
+        //     return;
+        // }
 
         if (config.npcs()) {
             if (isHiddenNpcMenuEntry(event.getMenuEntry())) {
@@ -163,14 +163,14 @@ public class UnPolledScapePlugin extends Plugin {
         }
     }
 
-    @Subscribe
-    public void onPostItemComposition(PostItemComposition event)
-    {
-        if (config.items())
-        {
-            itemAppearanceReplacements.applyTo(client, event.getItemComposition());
-        }
-    }
+    // @Subscribe
+    // public void onPostItemComposition(PostItemComposition event)
+    // {
+    //     if (config.items())
+    //     {
+    //         itemAppearanceReplacements.applyTo(client, event.getItemComposition());
+    //     }
+    // }
 
     @Subscribe
     public void onPlayerChanged(PlayerChanged event)
@@ -202,11 +202,11 @@ public class UnPolledScapePlugin extends Plugin {
         }
 
         Map<Integer, Integer> replacementMap = itemAppearanceReplacements.replacementMap(client);
-        if (config.items()) {
-            itemAppearanceReplacements.apply(client);
-        } else {
-            itemAppearanceReplacements.restore(client);
-        }
+        // if (config.items()) {
+        //     itemAppearanceReplacements.apply(client);
+        // } else {
+        //     itemAppearanceReplacements.restore(client);
+        // }
 
         if (config.players()) {
             playerAppearanceReplacements.apply(client, replacementMap);
