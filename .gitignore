@@ -10,4 +10,5 @@ out/
 hs_err_pid*
 replay_pid*
 *.vscode
+*.github
 docs/personal-doc.md
