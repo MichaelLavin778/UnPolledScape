@@ -6,6 +6,8 @@ import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 
 /**
+ * NOT FUNCTIONAL - TODO TO FIX
+ * 
  * Reskins modern cosmetic items so they render as the legacy item they replace, everywhere the game
  * draws an item from its composition: inventory, equipment, bank, ground and chat/quest dialogs.
  *

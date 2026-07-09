@@ -28,7 +28,6 @@ import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PlayerChanged;
 import net.runelite.api.events.SoundEffectPlayed;
-// import net.runelite.api.events.PostItemComposition;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.callback.ClientThread;
@@ -39,7 +38,6 @@ import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
-// import net.runelite.client.ui.overlay.OverlayManager;
 
 @Slf4j
 @PluginDescriptor(name = "UnPolledScape")
@@ -156,9 +154,6 @@ public class UnPolledScapePlugin extends Plugin {
 
     @Inject
     private RenderCallbackManager renderCallbackManager;
-
-    // @Inject
-    // private OverlayManager overlayManager;
 
     // @Inject
     // private ItemAppearanceOverlay itemAppearanceOverlay;
