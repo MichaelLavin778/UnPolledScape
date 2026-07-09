@@ -271,7 +271,9 @@ final class PlayerAppearanceReplacements
                     continue;
                 }
 
-                int equipmentId = idkit >= PlayerComposition.KIT_OFFSET ? idkit : idkit + PlayerComposition.KIT_OFFSET;
+                // The column stores a raw kit id; a player's equipment slot holds it offset by
+                // KIT_OFFSET, so always add the offset to match against getEquipmentIds().
+                int equipmentId = idkit + PlayerComposition.KIT_OFFSET;
                 if (row == DBTableID.FacialHairStyles.Row.NONE_FACIAL_HAIR)
                 {
                     femaleNoneJawEquipmentId = equipmentId;
