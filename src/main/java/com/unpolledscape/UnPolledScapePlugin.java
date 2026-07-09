@@ -2,21 +2,32 @@ package com.unpolledscape;
 
 import com.google.inject.Provides;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
+import net.runelite.api.Actor;
+import net.runelite.api.ActorSpotAnim;
 import net.runelite.api.Client;
+import net.runelite.api.IterableHashTable;
 import net.runelite.api.NPC;
 import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
+import net.runelite.api.Node;
+import net.runelite.api.Projectile;
 import net.runelite.api.Renderable;
+import net.runelite.api.events.AreaSoundEffectPlayed;
+import net.runelite.api.events.GameObjectSpawned;
 import net.runelite.api.events.GameTick;
+import net.runelite.api.events.GraphicChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOpened;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.PlayerChanged;
+import net.runelite.api.events.SoundEffectPlayed;
 // import net.runelite.api.events.PostItemComposition;
 import net.runelite.api.gameval.NpcID;
 import net.runelite.api.gameval.InterfaceID;
@@ -51,6 +62,18 @@ public class UnPolledScapePlugin extends Plugin {
     };
     private static final int LOVE_CROSSBOW_ID = 28128;
     private static final int POETS_JACKET_ID = 28126;
+
+    // The love crossbow's "Enamour" special fires a heart projectile (PRIDE23_ENAMOUR_ARROW).
+    private static final int ENAMOUR_PROJECTILE_ID = 2366;
+
+    // Heart spotanims shown on the firer (when fired) and the target (on impact) by the "Enamour"
+    // special (PRIDE23_ENAMOUR_ARROW / PRIDE23_ENAMOUR_IMPACT).
+    private static final int ENAMOUR_ARROW_SPOTANIM_ID = 2366;
+    private static final int ENAMOUR_IMPACT_SPOTANIM_ID = 2367;
+
+    // Sound effects played by the "Enamour" special (6998 = area sound, 6999 = sound effect).
+    private static final int ENAMOUR_AREA_SOUND_ID = 6998;
+    private static final int ENAMOUR_SOUND_ID = 6999;
 
     // ITEMS TO REPLACE WITH
     private static final int HELM_OF_RAEDWALD_ID = 19687;
@@ -142,6 +165,8 @@ public class UnPolledScapePlugin extends Plugin {
 
     private final MakeoverReplacements makeoverReplacements = new MakeoverReplacements();
     // private final ItemAppearanceReplacements itemAppearanceReplacements = new ItemAppearanceReplacements();
+    private final Experimental experimental = new Experimental();
+    private final GameObjectReplacements gameObjectReplacements = new GameObjectReplacements();
     private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
     private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
     private final NpcDialogueReplacement npcDialogueReplacement = new NpcDialogueReplacement();
@@ -169,6 +194,8 @@ public class UnPolledScapePlugin extends Plugin {
         clientThread.invoke(() -> {
             makeoverReplacements.restore(client);
             // itemAppearanceReplacements.restore(client);
+            experimental.restore(client);
+            gameObjectReplacements.restore(client);
             playerAppearanceReplacements.restore(client, REPLACEMENTS);
             npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
@@ -177,8 +204,8 @@ public class UnPolledScapePlugin extends Plugin {
 
     @Subscribe
     public void onMenuOptionClicked(MenuOptionClicked event) {
-        if (config.makeover()) {
-            makeoverReplacements.handleMenuOptionClicked(client, event);
+        if (config.experimental()) {
+            experimental.handleMenuOptionClicked(client, event);
         }
     }
 
@@ -199,7 +226,7 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.handleMenuEntryAdded(client, event);
         }
 
-        if (config.items()
+        if (config.experimental()
             && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
                 || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
             client.getMenu().removeMenuEntry(event.getMenuEntry());
@@ -218,13 +245,13 @@ public class UnPolledScapePlugin extends Plugin {
 
     @Subscribe
     public void onMenuOpened(MenuOpened event) {
-        if (config.npcs() || config.items()) {
+        if (config.npcs() || config.experimental()) {
             MenuEntry[] menuEntries = event.getMenuEntries();
             int kept = 0;
             for (MenuEntry menuEntry : menuEntries) {
                 if (isHiddenNpcMenuEntry(menuEntry)
                     || isHiddenReplacedItemMenuEntry(menuEntry)
-                    || (config.items() && isHiddenEnamourMenuEntry(menuEntry))) {
+                    || (config.experimental() && isHiddenEnamourMenuEntry(menuEntry))) {
                     continue;
                 }
 
@@ -263,6 +290,90 @@ public class UnPolledScapePlugin extends Plugin {
     }
 
     @Subscribe
+    public void onGameObjectSpawned(GameObjectSpawned event)
+    {
+        if (config.gameObjects())
+        {
+            gameObjectReplacements.handleGameObjectSpawned(client, event);
+        }
+    }
+
+    @Subscribe
+    public void onSoundEffectPlayed(SoundEffectPlayed event)
+    {
+        if (config.players() && isEnamourSound(event.getSoundId()))
+        {
+            event.consume();
+        }
+    }
+
+    @Subscribe
+    public void onAreaSoundEffectPlayed(AreaSoundEffectPlayed event)
+    {
+        if (config.players() && isEnamourSound(event.getSoundId()))
+        {
+            event.consume();
+        }
+    }
+
+    private static boolean isEnamourSound(int soundId)
+    {
+        return soundId == ENAMOUR_AREA_SOUND_ID || soundId == ENAMOUR_SOUND_ID;
+    }
+
+    @Subscribe
+    public void onGraphicChanged(GraphicChanged event)
+    {
+        if (!config.players())
+        {
+            return;
+        }
+
+        removeEnamourSpotAnims(event.getActor());
+    }
+
+    private void removeEnamourSpotAnims(Actor actor)
+    {
+        if (actor == null)
+        {
+            return;
+        }
+
+        IterableHashTable<ActorSpotAnim> spotAnims = actor.getSpotAnims();
+        if (spotAnims == null)
+        {
+            return;
+        }
+
+        // Collect keys first; the spotanim table must not be modified while iterating it.
+        List<Integer> keysToRemove = null;
+        for (ActorSpotAnim spotAnim : spotAnims)
+        {
+            if (isEnamourSpotAnim(spotAnim.getId()))
+            {
+                if (keysToRemove == null)
+                {
+                    keysToRemove = new ArrayList<>();
+                }
+                keysToRemove.add((int) ((Node) spotAnim).getHash());
+            }
+        }
+
+        if (keysToRemove != null)
+        {
+            for (int key : keysToRemove)
+            {
+                actor.removeSpotAnim(key);
+            }
+        }
+    }
+
+    private static boolean isEnamourSpotAnim(int spotAnimId)
+    {
+        return spotAnimId == ENAMOUR_ARROW_SPOTANIM_ID || spotAnimId == ENAMOUR_IMPACT_SPOTANIM_ID;
+    }
+
+    @Subscribe
     public void onGameTick(GameTick event)
     {
         // The makeover/hairdresser interface builds its options dynamically and repopulates on body
@@ -271,6 +382,11 @@ public class UnPolledScapePlugin extends Plugin {
         {
             makeoverReplacements.apply(client);
         }
+
+        if (config.experimental())
+        {
+            experimental.apply(client);
+        }
     }
 
     private void checklist() {
@@ -278,6 +394,12 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.apply(client);
         } else {
             makeoverReplacements.restore(client);
+        }
+
+        if (config.experimental()) {
+            experimental.apply(client);
+        } else {
+            experimental.restore(client);
         }
 
         // if (config.items()) {
@@ -291,6 +413,12 @@ public class UnPolledScapePlugin extends Plugin {
         }
         else {
             playerAppearanceReplacements.restore(client, REPLACEMENTS);
+        }
+
+        if (config.gameObjects()) {
+            gameObjectReplacements.apply(client);
+        } else {
+            gameObjectReplacements.restore(client);
         }
 
         if (config.npcs()) {
@@ -380,12 +508,14 @@ public class UnPolledScapePlugin extends Plugin {
 
     private boolean shouldDraw(Renderable renderable, boolean drawingUi)
     {
-        if (!config.npcs())
+        if (config.players()
+            && renderable instanceof Projectile
+            && ((Projectile) renderable).getId() == ENAMOUR_PROJECTILE_ID)
         {
-            return true;
+            return false;
         }
 
-        if (renderable instanceof NPC)
+        if (config.npcs() && renderable instanceof NPC)
         {
             int npcId = ((NPC) renderable).getId();
             return npcId != NpcID.PRIDE22_GILBERT && npcId != NpcID.PRIDE24_KIT_GLADE;

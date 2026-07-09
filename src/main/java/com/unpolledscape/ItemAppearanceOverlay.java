@@ -36,7 +36,7 @@ class ItemAppearanceOverlay extends WidgetItemOverlay
     @Override
     public void renderItemOverlay(Graphics2D graphics, int itemId, WidgetItem widgetItem)
     {
-        if (!config.items())
+        if (!config.experimental())
         {
             return;
         }

@@ -14,7 +14,6 @@ import net.runelite.api.Client;
 import net.runelite.api.Player;
 import net.runelite.api.PlayerComposition;
 import net.runelite.api.events.MenuEntryAdded;
-import net.runelite.api.events.MenuOptionClicked;
 // import net.runelite.api.gameval.DBTableID;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.VarbitID;
@@ -23,7 +22,6 @@ import net.runelite.api.widgets.Widget;
 final class MakeoverReplacements
 {
     private static final int BODY_TYPE_B = 1;
-    private static final int MAX_HAIR_STYLE_SKIPS = 64;
     private static final String MODERN_CHARACTER_PROMPT = "Select skin colour, body type and pronouns";
     private static final String LEGACY_CHARACTER_PROMPT = "Select skin colour and gender";
     private static final String MODERN_BODY_TYPE_SINGULAR = "Body type";
@@ -33,24 +31,6 @@ final class MakeoverReplacements
     private static final String SHAVE_MENU_OPTION = "shave";
     private static final Pattern TAG_PATTERN = Pattern.compile("<[^>]*>");
     private static final Pattern STYLE_NAME_NORMALIZER = Pattern.compile("[^a-z0-9]");
-
-    // Legacy (pre-"Diversity & Inclusion") gendered hairstyles, by display name. A style that
-    // historically belonged to one body type is hidden from the other; styles shared by both
-    // (Bald/Long/Medium/Short/Cropped) stay for both. Post-2024 unisex additions (Afro, Punk,
-    // Pompadour, ...) are intentionally NOT listed, so they are treated as unknown and left visible
-    // for both body types (we only hide styles that were genuinely single-gender).
-    private static final Set<String> LEGACY_MASCULINE_HAIR_STYLES = normalizeToSet(
-        "Bald", "Dreadlocks", "Long", "Medium", "Tonsure", "Short", "Cropped", "Wild spikes", "Spikes",
-        "Mohawk", "Wind braids", "Quiff", "Samurai", "Princely", "Curtains", "Long curtains",
-        "Front split", "Tousled", "Side wedge", "Front wedge", "Front spikes", "Frohawk", "Rear skirt",
-        "Queue");
-
-    private static final Set<String> LEGACY_FEMININE_HAIR_STYLES = normalizeToSet(
-        "Bald", "Long", "Medium", "Short", "Cropped", "Bun", "Pigtails", "Earmuffs", "Side pony",
-        "Curls", "Ponytail", "Braids", "Bunches", "Bob", "Layered", "Straight");
-
-    private static final Set<String> KNOWN_HAIR_STYLES =
-        union(LEGACY_MASCULINE_HAIR_STYLES, LEGACY_FEMININE_HAIR_STYLES);
 
     private static final int[] PLAYER_DESIGN_PRONOUN_WIDGETS = {
         InterfaceID.PlayerDesign.DROPDOWN_CONTAINER,
@@ -102,11 +82,6 @@ final class MakeoverReplacements
         }
     }
 
-    boolean handleMenuOptionClicked(Client client, MenuOptionClicked event)
-    {
-        return handlePlayerDesignHairClick(client, event) || handleMakeoverHairClick(client, event);
-    }
-
     void handleMenuEntryAdded(Client client, MenuEntryAdded event)
     {
         if (!isShaveMenuOption(event.getOption()) || !isLocalPlayerFemale(client))
@@ -131,8 +106,8 @@ final class MakeoverReplacements
         // Un-hide any makeover swatches / category items we hid. These are dynamic children that
         // share their container's packed id, so they are not tracked via the snapshot map; passing a
         // predicate that never hides simply makes every run visible again.
-        hideMakeoverSwatches(client.getWidget(InterfaceID.Makeover.ITEM_AREA), text -> false);
         hideMakeoverSwatches(client.getWidget(InterfaceID.Makeover.BURGER_MENU_FRAME), text -> false);
+        hideMakeoverSwatches(client.getWidget(InterfaceID.MakeoverMage.BURGER_MENU_FRAME), text -> false);
 
         snapshots.clear();
         forcedHiddenWidgetIds.clear();
@@ -154,7 +129,6 @@ final class MakeoverReplacements
         setNameAndAction(client, InterfaceID.PlayerDesign.GENDER_FEMALE, "Female");
         setWidgetsHidden(client, PLAYER_DESIGN_PRONOUN_WIDGETS, true);
         setWidgetsHidden(client, PLAYER_DESIGN_FACIAL_HAIR_WIDGETS, isPlayerDesignFemale(client));
-        enforcePlayerDesignHair(client, true);
         return true;
     }
 
@@ -171,6 +145,9 @@ final class MakeoverReplacements
         setNameAndAction(client, InterfaceID.MakeoverMage.BODYTYPE_A, "Male");
         setNameAndAction(client, InterfaceID.MakeoverMage.BODYTYPE_B, "Female");
         setWidgetsHidden(client, MAKEOVER_MAGE_PRONOUN_WIDGETS, true);
+        boolean female = isMakeoverFemale(client);
+        hideMakeoverSwatches(client.getWidget(InterfaceID.MakeoverMage.BURGER_MENU_FRAME),
+            text -> female && isFacialHairCategoryLabel(text));
         return true;
     }
 
@@ -184,107 +161,12 @@ final class MakeoverReplacements
         replaceInterfaceText(client, InterfaceID.Makeover.UNIVERSE);
         boolean female = isMakeoverFemale(client);
 
-        // Hide cross-sex hairstyle swatches in the selection grid.
-        hideMakeoverSwatches(client.getWidget(InterfaceID.Makeover.ITEM_AREA),
-            text -> isDisallowedHairStyle(text, female));
-
         // Legacy female characters have no facial hair, so hide the "Facial hair" entry from the
         // category (burger) dropdown. Males keep it (all beards were always male-legacy).
         hideMakeoverSwatches(client.getWidget(InterfaceID.Makeover.BURGER_MENU_FRAME),
             text -> female && isFacialHairCategoryLabel(text));
 
         return true;
-    }
-
-    private boolean handlePlayerDesignHairClick(Client client, MenuOptionClicked event)
-    {
-        if (client.getWidget(InterfaceID.PlayerDesign.UNIVERSE) == null)
-        {
-            return false;
-        }
-
-        Widget widget = event.getWidget();
-        if (widget == null)
-        {
-            return false;
-        }
-
-        int widgetId = widget.getId();
-        if (widgetId != InterfaceID.PlayerDesign.HEAD_LEFT && widgetId != InterfaceID.PlayerDesign.HEAD_RIGHT)
-        {
-            return false;
-        }
-
-        event.consume();
-        clickPlayerDesignHairArrow(client, widget, isPlayerDesignFemale(client));
-        return true;
-    }
-
-    private boolean handleMakeoverHairClick(Client client, MenuOptionClicked event)
-    {
-        if (client.getWidget(InterfaceID.Makeover.UNIVERSE) == null)
-        {
-            return false;
-        }
-
-        boolean female = isMakeoverFemale(client);
-        Widget widget = event.getWidget();
-        if (isDisallowedHairStyle(event.getMenuTarget(), female)
-            || isDisallowedHairStyle(widget == null ? null : widget.getText(), female)
-            || isDisallowedHairStyle(widget == null ? null : widget.getName(), female))
-        {
-            event.consume();
-            return true;
-        }
-
-        return false;
-    }
-
-    private void enforcePlayerDesignHair(Client client, boolean forward)
-    {
-        if (isCurrentPlayerDesignHairAllowed(client, isPlayerDesignFemale(client)))
-        {
-            return;
-        }
-
-        Widget arrow = client.getWidget(forward ? InterfaceID.PlayerDesign.HEAD_RIGHT : InterfaceID.PlayerDesign.HEAD_LEFT);
-        if (arrow != null)
-        {
-            clickPlayerDesignHairArrow(client, arrow, isPlayerDesignFemale(client));
-        }
-    }
-
-    private void clickPlayerDesignHairArrow(Client client, Widget arrow, boolean female)
-    {
-        Object[] listener = arrow.getOnOpListener();
-        if (listener == null)
-        {
-            return;
-        }
-
-        String previousStyle = getWidgetText(client, InterfaceID.PlayerDesign.HEAD_TEXT);
-        for (int i = 0; i < MAX_HAIR_STYLE_SKIPS; i++)
-        {
-            client.runScript(listener);
-
-            String currentStyle = getWidgetText(client, InterfaceID.PlayerDesign.HEAD_TEXT);
-            if (isHairStyleAllowed(currentStyle, female))
-            {
-                return;
-            }
-
-            if (Objects.equals(previousStyle, currentStyle))
-            {
-                return;
-            }
-
-            previousStyle = currentStyle;
-        }
-    }
-
-    private boolean isCurrentPlayerDesignHairAllowed(Client client, boolean female)
-    {
-        return isHairStyleAllowed(getWidgetText(client, InterfaceID.PlayerDesign.HEAD_TEXT), female);
     }
 
     /**
@@ -297,7 +179,7 @@ final class MakeoverReplacements
      * body-type switches and doubles as the restore path when passed a never-hide predicate. The
      * full-panel cs2 script-host child that drives population is skipped.
      */
-    private void hideMakeoverSwatches(Widget container, Predicate<String> shouldHide)
+    static void hideMakeoverSwatches(Widget container, Predicate<String> shouldHide)
     {
         if (container == null)
         {
@@ -350,18 +232,12 @@ final class MakeoverReplacements
         return widget.getWidth() > 300 || widget.getHeight() > 300;
     }
 
-    private String getWidgetText(Client client, int widgetId)
-    {
-        Widget widget = client.getWidget(widgetId);
-        return widget == null ? null : widget.getText();
-    }
-
-    private boolean isPlayerDesignFemale(Client client)
+    static boolean isPlayerDesignFemale(Client client)
     {
         return client.getVarbitValue(VarbitID.PLAYER_DESIGN_BODYTYPE) == BODY_TYPE_B;
     }
 
-    private boolean isMakeoverFemale(Client client)
+    static boolean isMakeoverFemale(Client client)
     {
         return client.getVarbitValue(VarbitID.MAKEOVER_BODYTYPE) == BODY_TYPE_B;
     }
@@ -511,49 +387,7 @@ final class MakeoverReplacements
         snapshots.computeIfAbsent(widget.getId(), id -> WidgetSnapshot.from(widget));
     }
 
-    private boolean isDisallowedHairStyle(String text, boolean female)
-    {
-        String styleName = normalizeStyleName(text);
-        if (styleName.isEmpty() || !KNOWN_HAIR_STYLES.contains(styleName))
-        {
-            return false;
-        }
-
-        return !getAllowedHairStyles(female).contains(styleName);
-    }
-
-    private boolean isHairStyleAllowed(String text, boolean female)
-    {
-        return !isDisallowedHairStyle(text, female);
-    }
-
-    private Set<String> getAllowedHairStyles(boolean female)
-    {
-        return female ? LEGACY_FEMININE_HAIR_STYLES : LEGACY_MASCULINE_HAIR_STYLES;
-    }
-
-    private static Set<String> normalizeToSet(String... names)
-    {
-        Set<String> set = new HashSet<>();
-        for (String name : names)
-        {
-            String normalized = normalizeStyleName(name);
-            if (!normalized.isEmpty())
-            {
-                set.add(normalized);
-            }
-        }
-        return set;
-    }
-
-    private static Set<String> union(Set<String> first, Set<String> second)
-    {
-        Set<String> set = new HashSet<>(first);
-        set.addAll(second);
-        return set;
-    }
-
-    private static String normalizeStyleName(String text)
+    static String normalizeStyleName(String text)
     {
         if (text == null)
         {
