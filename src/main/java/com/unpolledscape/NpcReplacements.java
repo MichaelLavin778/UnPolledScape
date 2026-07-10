@@ -28,10 +28,6 @@ final class NpcReplacements
         Replacement.npcName("Warrior", "Warrior woman", "Warrior women")
     };
 
-    private NpcReplacements()
-    {
-    }
-
     static String restoreNpcText(String text)
     {
         if (text == null)
