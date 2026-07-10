@@ -9,6 +9,12 @@ import net.runelite.api.NPCComposition;
 import net.runelite.api.NodeCache;
 import net.runelite.api.gameval.NpcID;
 
+/**
+ * TODO TEST THIS
+ * 
+ * Handles the replacement of Lady Keli's appearance with legacy models and colors.
+ * Provides methods to apply and restore the legacy appearance.
+ */
 final class NpcAppearanceReplacements
 {
     private static final int[] LADY_KELI_LEGACY_MODELS = {390, 456, 332, 353, 428, 358};

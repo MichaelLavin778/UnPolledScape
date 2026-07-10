@@ -40,7 +40,11 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 
 @Slf4j
-@PluginDescriptor(name = "UnPolledScape")
+@PluginDescriptor(
+    name = "UnPolledScape",
+    description = "Restores selected legacy NPC, dialogue, character, item, and game object elements that have been altered or removed in the due to unpolled game updates.",
+    tags = {"unpolled", "integrity", "legacy", "modern", "poll", "vote", "pride", "diversity", "inclusion"}
+)
 public class UnPolledScapePlugin extends Plugin {
     // ITEMS TO REPLACE
     private static final int[] FLOWER_CROWN_IDS = {
@@ -163,7 +167,7 @@ public class UnPolledScapePlugin extends Plugin {
     private final Experimental experimental = new Experimental();
     private final GameObjectReplacements gameObjectReplacements = new GameObjectReplacements();
     private final PlayerAppearanceReplacements playerAppearanceReplacements = new PlayerAppearanceReplacements();
-    private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
+    // private final NpcAppearanceReplacements npcAppearanceReplacements = new NpcAppearanceReplacements();
     private final NpcDialogueReplacement npcDialogueReplacement = new NpcDialogueReplacement();
     private final RenderCallback renderCallback = new RenderCallback()
     {
@@ -192,7 +196,7 @@ public class UnPolledScapePlugin extends Plugin {
             experimental.restore(client);
             gameObjectReplacements.restore(client);
             playerAppearanceReplacements.restore(client, REPLACEMENTS);
-            npcAppearanceReplacements.restoreLadyKeli(client);
+            // npcAppearanceReplacements.restoreLadyKeli(client);
             log.debug("UnPolledScape stopped");
         });
     }
@@ -221,6 +225,11 @@ public class UnPolledScapePlugin extends Plugin {
             makeoverReplacements.handleMenuEntryAdded(client, event);
         }
 
+        if (config.npcs() && isHiddenFrogPatMenuEntry(event.getMenuEntry())) {
+            client.getMenu().removeMenuEntry(event.getMenuEntry());
+            return;
+        }
+
         if (config.experimental()
             && (isHiddenReplacedItemMenuEntry(event.getMenuEntry())
                 || isHiddenEnamourMenuEntry(event.getMenuEntry()))) {
@@ -245,6 +254,7 @@ public class UnPolledScapePlugin extends Plugin {
             int kept = 0;
             for (MenuEntry menuEntry : menuEntries) {
                 if (isHiddenNpcMenuEntry(menuEntry)
+                    || isHiddenFrogPatMenuEntry(menuEntry)
                     || isHiddenReplacedItemMenuEntry(menuEntry)
                     || (config.experimental() && isHiddenEnamourMenuEntry(menuEntry))) {
                     continue;
@@ -405,8 +415,7 @@ public class UnPolledScapePlugin extends Plugin {
 
         if (config.players()) {
             playerAppearanceReplacements.apply(client, REPLACEMENTS);
-        }
-        else {
+        } else {
             playerAppearanceReplacements.restore(client, REPLACEMENTS);
         }
 
@@ -418,9 +427,9 @@ public class UnPolledScapePlugin extends Plugin {
 
         if (config.npcs()) {
             npcDialogueReplacement.replaceDialogueWidgets(client, DIALOGUE_WIDGETS);
-            npcAppearanceReplacements.applyLadyKeli(client);
+            // npcAppearanceReplacements.applyLadyKeli(client);
         } else {
-            npcAppearanceReplacements.restoreLadyKeli(client);
+            // npcAppearanceReplacements.restoreLadyKeli(client);
         }
     }
 
@@ -430,6 +439,32 @@ public class UnPolledScapePlugin extends Plugin {
             && isHiddenNpcTarget(menuEntry.getTarget());
     }
 
+    private boolean isHiddenFrogPatMenuEntry(MenuEntry menuEntry)
+    {
+        if (menuEntry == null)
+        {
+            return false;
+        }
+
+        String option = menuEntry.getOption();
+        if (option == null || !"Pat".equals(option))
+        {
+            return false;
+        }
+
+        return isFrogRoyalty(menuEntry.getTarget());
+    }
+
+    private static boolean isFrogRoyalty(String target)
+    {
+        if (target == null)
+        {
+            return false;
+        }
+
+        String lowerTarget = target.toLowerCase();
+        return lowerTarget.contains("frog prince") || lowerTarget.contains("frog princess");
+    }
     private boolean isHiddenReplacedItemMenuEntry(MenuEntry menuEntry)
     {
         return menuEntry != null

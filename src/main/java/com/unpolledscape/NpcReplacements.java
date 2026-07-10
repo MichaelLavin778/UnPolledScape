@@ -13,6 +13,13 @@ final class NpcReplacements
         Replacement.npcName("Tormented Warriors", "Jungle savages"),
         Replacement.npcName("Tormented Warrior", "Jungle savage"),
         Replacement.npcName("Faisal the Barman", "Ali the Barman"),
+        Replacement.npcName("Sami the Camel Man", "Ali the Camel Man"),
+        Replacement.npcName("Rashid the Operator", "Ali the Operator"),
+        Replacement.npcName("Alisha the Hag", "Ali the Hag"),
+        Replacement.npcName("Hakeem the Mayor", "Ali the Mayor"),
+        Replacement.npcName("Isma'il The Kebab Seller", "Ali the Kebab seller"),
+        Replacement.npcName("Jalal the Drunk", "Drunken Ali"),
+        Replacement.npcName("Badir the Snake Charmer", "Ali the Snake Charmer"),
         Replacement.npcName("Aris", "Gypsy Aris"),
         Replacement.npcName("Okina", "Enoch"),
         Replacement.npcName("Zembo", "Zambo"),
@@ -47,18 +54,8 @@ final class NpcReplacements
             return null;
         }
 
-        if ("Pat".equals(option) && target != null && isFrogRoyalty(target))
-        {
-            return "Kiss";
-        }
 
         return option;
-    }
-
-    private static boolean isFrogRoyalty(String target)
-    {
-        String lowerTarget = target.toLowerCase();
-        return lowerTarget.contains("frog prince") || lowerTarget.contains("frog princess");
     }
 
     private static final class Replacement
