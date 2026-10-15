@@ -10,6 +10,8 @@ specific game object adjustments.
 
 ## What This Plugin Does
 
+![Example gif](assets/Example.gif)
+
 At a high level, UnPolledScape can:
 
 - Restore selected NPC names and dialogue/menu wording to legacy text.
@@ -19,6 +21,8 @@ At a high level, UnPolledScape can:
 	interactions.
 - Hide selected game objects that were added/changed in D&I updates.
 - Apply a limited set of experimental legacy item/name and hairstyle behavior.
+
+![Makeover gif](assets/Makeover.gif)
 
 ## Configuration
 
